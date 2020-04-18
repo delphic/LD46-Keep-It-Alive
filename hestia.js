@@ -511,7 +511,7 @@ var loadFont = Hestia.loadFont = function(font) {
         let pollId = window.setInterval(function(){
             // Hack to wait for src to finish
             if (fontSheet.width > 0) {
-                createFontJson(fontSheet, font.name, font.alphabet, font.width, font.height, font.spacing);
+                createFontJson(fontSheet, font.name, font.alphabet, font.width, font.height, font.spacing, font.reducedWidthLowerCase, font.baselineOffsets);
                 lockCount -= 1;
                 window.clearInterval(pollId);
             }
@@ -594,19 +594,47 @@ var drawText = Hestia.drawText = function(text, x, y, c) {
 		text = text.toUpperCase();
 	}
 	var n = currentFont.width * currentFont.height;
+	let offset = 0;
 	for(var i = 0, l = text.length; i < l; i++) {
 		var letter = text.substr(i,1);
 		if (letter == ' ' || !currentFont[letter]) {
+    		offset += currentFont.width + currentFont.spacing;
 			continue;
+		}
+		// Hacky Kerning
+		let xOffset = 0, yOffset = 0;
+		if (currentFont.reducedWidthLowerCase && letter.toUpperCase() != letter && letter != "m" && letter != "w") {
+		    xOffset = -currentFont.reducedWidthLowerCase;
+		}
+		if (currentFont.baselineOffsets && currentFont.baselineOffsets.includes(letter)) {
+		    yOffset = +1;
 		}
 		for (var p = 0; p < n; p++) {
 			if (currentFont[letter][p]) {
 				ctx.fillRect(
-				    x + i * (currentFont.width + currentFont.spacing) + p % currentFont.width, y + Math.floor(p / currentFont.width), 1, 1);
+				    x + offset + xOffset + p % currentFont.width, y + yOffset + Math.floor(p / currentFont.width), 1, 1);
 			}
 		}
+		offset += currentFont.width + currentFont.spacing + xOffset;
 	}
 	// It may be worth investigating if drawing the text to a canvas in the palette color and then using drawImage to draw the font might be faster.
+};
+
+var measureText = Hestia.measureText = function(text) {
+    let length = 0;
+    if (currentFont.reducedWidthLowerCase) {
+        for(var i = 0, l = text.length; i < l; i++) {
+            var letter = text[i];
+            if (currentFont[letter] && letter.toUpperCase() != letter && letter != "m" && letter != "w") {
+                length += currentFont.width + currentFont.spacing - currentFont.reducedWidthLowerCase;
+            } else {
+        		length += currentFont.width + currentFont.spacing;
+            }
+        }
+    } else {
+        length = (currentFont.width + currentFont.spacing) * text.length;
+    }
+    return length;
 };
 
 var palettiseSpriteSheet = function(spriteSheet, palette, transparencyIndex) {
@@ -674,7 +702,7 @@ var palettiseSpriteSheet = function(spriteSheet, palette, transparencyIndex) {
     }
 };
 
-var createFontJson = function(spriteSheet, name, alphabet, w, h, spacing) {
+var createFontJson = function(spriteSheet, name, alphabet, w, h, spacing, reducedWidthLowerCase, baselineOffsets) {
     if (!palettiseCanvas) {
         palettiseCanvas = document.createElement("canvas");
         document.body.appendChild(palettiseCanvas);
@@ -683,7 +711,9 @@ var createFontJson = function(spriteSheet, name, alphabet, w, h, spacing) {
     let font = {
         width: w,
         height: h,
-        spacing: spacing
+        spacing: spacing,
+        reducedWidthLowerCase: reducedWidthLowerCase,
+        baselineOffsets: baselineOffsets
     };
     
     w = w + spacing;

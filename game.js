@@ -3,6 +3,31 @@ var currentReaction;
 var uiElements = [];
 var creature;
 
+var routines = [], routineStarts = [], routineTick = 0;
+var addRoutine = function(predicate) {
+    if (!predicate(0)) {
+        routines.push(predicate);
+        routineStarts.push(routineTick);
+    }
+};
+var removeRoutine = function(i) {
+    routines.splice(i, 1);
+    routineStarts.splice(i, 1);
+};
+var updateRoutines = function() {
+    routineTick++;
+    for (let i = routines.length - 1; i >= 0; i--) {
+        if (routines[i](routineTick - routineStarts[i])) {
+            removeRoutine(i);
+        }
+    }
+};
+var resetRoutines = function() {
+    routines = [];
+    routineStarts = [];
+    routineTick = 0;
+};
+
 var Creature = (function() {
     var exports = {};
     var proto = {};
@@ -69,6 +94,7 @@ var Creature = (function() {
 
 var kittyDef = {
     needs: [
+        // TODO: Hiearchy of needs - if same category (i.e. band) the higher need gets prio
         { "id": "play", "growth": 5, "value": 50 },
         { "id": "food", "growth": 1, "value": 10 }
     ],
@@ -88,6 +114,7 @@ var kittyDef = {
         } else if (creature.needs["play"].value > 50) {
             creature.changeEmotion("cheer", -1);
         }
+        // TODO: Die if not fed for long enough - that or growth curve and die at reaching 100
     },
     responses: function(creature, action) {
         let desc = "";
@@ -109,35 +136,41 @@ var kittyDef = {
     },
     draw: function(creature) {
         // Sprite please
-        Hestia.fillRect((160/2) - 16, (144/2)-32, 32, 32, 1);
+        Hestia.fillRect((160/2) - 16, (144/2) - 16, 32, 32, 1);
+        // TODO: Display primary mood
     }
 };
+
+// TODO: Move to class / protype
+var interaction = function(index) { // TODO: Context / Options
+   currentReaction = creature.interact(actions[index]);
+   actionsBox.active = false;
+   addRoutine(function(ticks) {
+       // show progress bar for action
+       if (ticks > 30 * 3) {
+           currentReaction = "";
+           actionsBox.active = true;
+           return true;
+       }
+       return false;
+   });
+};
+
 
 var actions = [{
     name: "feed",
-    description: "Feed"
-    /* TODO: Options */
+    description: "Feed",
+    interaction: function() { interaction(0); }
 }, {
     name: "play",
-    description: "Play"
-    /* TODO: Options */
+    description: "Play",
+    interaction: function() { interaction(1); }
 }];
 
-var reactionTimeoutId = -1;
-var setCurrentReaction = function(message, duration) {
-    currentReaction = message;
-    if (reactionTimeoutId >= 0) {
-        window.clearTimeout(reactionTimeoutId);
-    }
-    reactionTimeoutId = window.setTimeout(function(){ currentReaction = ""; reactionTimeoutId = -1; }, duration * 1000);
-};
+
 
 var init = function() {
-    actionsBox = TextBox.create(16, 144 - 24, [actions[0].description, actions[1].description], 0, 3, true, [ function(){
-        setCurrentReaction(creature.interact(actions[0]), 2);
-    }, function() {
-        setCurrentReaction(creature.interact(actions[1]), 2);
-    }]);
+    actionsBox = TextBox.create(3, 144 - 24, [actions[0].description, actions[1].description], 0, 3, true, [ actions[0].interaction, actions[1].interaction ]);
     actionsBox.index = uiElements.length;
     actionsBox.active = true;
     uiElements.push(actionsBox);
@@ -171,9 +204,10 @@ var createEmotionValueDelegate = function(emotionId) {
 
 var journeyTick = 0, creatureUpdateRate = 30;
 var update = function() {
+    updateRoutines();
+    
     journeyTick += 1;
     if (journeyTick % creatureUpdateRate === 0) {
-        console.log("Creature update!");
         creature.update();
     }
 
@@ -192,7 +226,8 @@ var draw = function() {
 
     if (currentReaction) {
         // Show hot key in hestia to show grid lines with labels would be nice
-        Hestia.drawText(currentReaction, 32, 144-32, 1);
+        // Centered Text could be nice...
+        Hestia.drawText(currentReaction, 3, 100, 1);
     }
 
 	for (let i = 0, l = uiElements.length; i < l; i++) {
@@ -221,7 +256,9 @@ var config = {
 	    "width": 5,
 	    "height": 7,
 	    "spacing": 1,
-	    "alphabet":  "ABCDEFGHIJKLMNOPQRSTUVabcdefghijklmnopqrstuvWXYZ0123456789_.,!?:; wxyz()[]{}'\"/\\|=-+*<>"
+	    "alphabet":  "ABCDEFGHIJKLMNOPQRSTUVabcdefghijklmnopqrstuvWXYZ0123456789_.,!?:; wxyz()[]{}'\"/\\|=-+*<>",
+	    "reducedWidthLowerCase": 1,
+	    "baselineOffsets": "gjpqy"
 	},
 	/*"spriteSheet": { 
 		"path": "", 
@@ -270,6 +307,10 @@ var TextBox = (function(){
 		color: 0,
 		bgColor: 21,
 		draw: function() {
+		    if (this.dirty) {
+		        this.dirty = false;
+		        this.recalculateDimensions();
+		    }
 			var indent = 0;
 			if (this.select) {
 				indent = 4;
@@ -323,12 +364,14 @@ var TextBox = (function(){
 				indent = 3;
 			}
 			var maxWidth = 0;
+			var maxWidthText = "";
 			for(var i = 0; i < this.lines.length; i++) {
 				if (this.lines[i].length > maxWidth) {
 					maxWidth = this.lines[i].length;
+					maxWidthText = this.lines[i];
 				}
-			}			
-			return this.charWidth * maxWidth + 2 * this.padding + indent;
+			}
+			return Hestia.measureText(maxWidthText) + 2 * this.padding + indent;   // TODO: Adjust for kerning
 		},
 		calculateMinHeight: function() {
 			return 2 * this.padding + this.lines.length*(this.charHeight+this.spacing) - (this.spacing+1);
@@ -344,9 +387,9 @@ var TextBox = (function(){
 		textBox.color = color;
 		textBox.bgColor = bgColor;
 		textBox.select = select;
-		textBox.recalculateDimensions();
 		textBox.actions = actions;
 		textBox.cancelAction = cancelAction;
+		textBox.dirty = true;
 		return textBox;
 	};
 

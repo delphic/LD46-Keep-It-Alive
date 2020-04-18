@@ -1,13 +1,17 @@
-var actionsBox, currentReactionBox;
-var creature;
-var debug = true;
+var actionsBox, currentReactionBox, journeyProgressBar, moodText;
+var score = 0, journeysComplete = 0, tourLength = 3;
+var journeyTick = 0, journeyLength = 30 * 120;
+var creature, creatureUpdateInterval = 30;    // Note - setting this lower increase impact of message duration effect
+var debug = true, debugBars = false;
 
+// These should probably be in their own module
 var uiElements = [];
 var addUIElement = function(uiElement){
     uiElement.index = uiElements.length;
     uiElements.push(uiElement);
 };
 
+// These should probably be in their own module
 var routines = [], routineStarts = [], routineTick = 0;
 var addRoutine = function(predicate) {
     if (!predicate(0)) {
@@ -85,7 +89,11 @@ var Creature = (function() {
             category: -1,
             priority: -1,
             desc: ""
-        }
+        };
+        
+        creature.calculateFeedback = function() {
+            return creature.def.calculateFeedback(creature);
+        };
         
         creature.getEmotionalAttentionNeed = function(id, invert) {
             let value = creature.emotions[id].value;
@@ -155,6 +163,34 @@ var kittyDef = {
         { "id": "playfulness", "value": 10, "priority": 4, "moods": [ "Asleep", "Sleepy", "Indifferent", "Playful", "Restless"] }
         // anger?
     ],
+    calculateFeedback: function(creature) { 
+        let score = 0;
+        let desc = 0;
+        if (creature.health === 100) {
+            let happiness = creature.getEmotionalAttentionNeed("cheer"); // Note not inverting
+            switch(happiness){
+                case 4:
+                case 3:
+                    desc = "They seem to have had a great time!"
+                    break;
+                case 2:
+                    desc = "Thanks for taking care of my pet";
+                    break;
+                case 1:
+                case 0:
+                default:
+                    desc = "Space kitty seems glad to be off the ship";
+                    break;
+            }
+        } else if (creature.health > 50) {
+            desc = "They don't seem to be in the best of health";
+        } else if (creature.health > 0) {
+            desc = "What have you done to my kitty?";
+        } else {
+            desc = "What!? They're dead. The revival fees are coming out of your pocket!";
+        }
+        return desc;
+    },
     init: function(creature) {
         let highestEmotionId, highestEmotionCategory = -1,  highestEmotionPriority = -1, highestEmotionDesc;
         creature.emotionalCategories = [];
@@ -322,18 +358,24 @@ var kittyDef = {
 // TODO: Move actions + interaction to class / protype
 var interaction = function(index) { // TODO: Context / Options
     let interactionResult = creature.interact(actions[index]);
+    showMessageBox(interactionResult, actions[index].duration)
+};
+
+var showMessageBox = function(text, duration, callback) {
     currentReactionBox.lines = TextBox.calculateLines(
-        interactionResult,
+        text,
         currentReactionBox.width - 2 * currentReactionBox.padding);
     currentReactionBox.dirty = true;
     currentReactionBox.active = true;
-    actionsBox.active = false;
-    let duration = actions[index].duration;
+    actionsBox.active = false;  // Should this be outside?
     addRoutine(function(ticks) {
        // show progress bar for action
        if (ticks > 30 * duration) {
            currentReactionBox.active = false;
-           actionsBox.active = true;
+           actionsBox.active = true;    // Should this be in callback?
+           if (callback) {
+               callback();
+           }
            return true;
        }
        return false;
@@ -344,7 +386,7 @@ var actions = [{
     name: "play",
     desc: "Play",
     interaction: function() { interaction(0); },
-    duration: 5
+    duration: 3
 },{
     name: "feed",
     desc: "Feed",
@@ -376,11 +418,54 @@ var init = function() {
     currentReactionBox.active = false;
     addUIElement(currentReactionBox);
     
+    journeyProgressBar = ProgressBar.create({
+        x: 1, y: 1, width: config.width - 4, height: 3,
+        valueDelegate: function() {
+            return journeyTick / journeyLength;
+        }
+    });
+    journeyProgressBar.active = true;
+    addUIElement(journeyProgressBar);
+    
+    moodText = {
+        active: true,
+        x: config.width - 1,
+        y: 32,
+        color: 1,
+        text: "",
+        update: function() {
+            this.text = creature.mood.desc;
+        },
+        draw: function() {
+            if (this.text) {
+                // right aligned
+                let width = Hestia.measureText(this.text);
+                Hestia.drawText(this.text, this.x - width , this.y, this.color);
+            }
+        }
+    };
+    addUIElement(moodText);
+    
+    let scoreText = {
+        active: true,
+        x: 1,
+        y: 6,
+        color: 0,
+        text: "",
+        update: function() {
+            this.text = "" + score + "/" + journeysComplete;
+        },
+        draw: function() {
+            Hestia.drawText(this.text, this.x, this.y, this.color);
+        }
+    };
+    addUIElement(scoreText);
+    
     creature = Creature.create(kittyDef);
     
     // Debug Bars
-    if (debug) {
-        let yOffset = 2;
+    if (debug && debugBars) {
+        let yOffset = 18;
         let healthBar = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: function() { return creature.health / 100; } })
         healthBar.label = "+";
         healthBar.active = true;
@@ -416,14 +501,42 @@ var init = function() {
     }
 };
 
-
-var journeyTick = 0, creatureUpdateInterval = 60;    // Note - setting this lower impacts effect of message duration
+var showingFinish = false;
 var update = function() {
     updateRoutines();
     
-    journeyTick += 1;
-    if (journeyTick % creatureUpdateInterval === 0) {
-        creature.update();
+    if (journeyTick < journeyLength) {
+        journeyTick += 1;
+        if (journeyTick % creatureUpdateInterval === 0) {
+            creature.update();
+        }
+    } else if (!showingFinish) {
+        showingFinish = true;
+        journeysComplete += 1;
+        let feedback = creature.calculateFeedback();
+        if (creature.health > 0) {
+            score += 1; 
+        }
+        // Who's speaking - it's the owner right? We should probably show this
+        showMessageBox(feedback, 2, function(){
+            let text;
+            if (creature.health > 0) {
+                text = "You keep it alive! :D";
+            } else {
+                text = "You failed to keep it alive. :(";
+            }
+            showMessageBox(text, 2, function(){
+                showingFinish = false;
+                if (journeysComplete >= tourLength) {
+                    // Show how many creatures you kept alive
+                    
+                } else {
+                    // TODO: Show prompt for continuing
+                    journeyTick = 0;
+                    creature = Creature.create(kittyDef);                    
+                }
+            });
+        });
     }
 
     for (let i = 0, l = uiElements.length; i < l; i++) {
@@ -438,12 +551,9 @@ var draw = function() {
 
 	//drawPalette(0,0,2);
 	creature.draw();
-	if (creature.mood.desc) {
-	    Hestia.drawText(creature.mood.desc, config.width/2, 2, 1);
-	}
 
 	for (let i = 0, l = uiElements.length; i < l; i++) {
-        if (uiElements[i].active) {
+        if (uiElements[i].active) { // differentiate active & visible
             uiElements[i].draw();
         }
     }

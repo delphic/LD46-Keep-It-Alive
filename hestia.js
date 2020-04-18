@@ -153,7 +153,12 @@ var HestiaAudio = module.exports = function() {
         masterGainNode.gain.value = value;
     };
 
-    exports.playNote = function(octave, note, waveformIndex, duration) {
+    // TODO: Try sequence of volumes and pitches using the same oscilator
+    // scheduling them in advance i.e. play SFX which specifies up to 32 notes
+    // with volumes (start with one instrument and then look a mixing it up) and 
+    // a playback spead
+
+    exports.playNote = function(octave, note, waveformIndex, duration, delay) {
         let freq = 0;
         if (octave > 0 && octave < noteTable.length) {
             freq = noteTable[octave][note];
@@ -169,21 +174,30 @@ var HestiaAudio = module.exports = function() {
         osc.connect(masterGainNode);
         // Would like to check out tracker implementations to see if this is 
         // how they do things or if there is anyway to reuse.
-        // Maybe we could disconnect the node?
+        // Maybe we could disconnect the node or change the gain
         
         if (waveformIndex < waveforms.length) {
             osc.type = waveforms[waveformIndex];
         } else {
             // TODO: Support more than one custom type!
             osc.setPeriodicWave(customWaveform);
+            // Here are some tasy wavetables:
+            // https://github.com/GoogleChromeLabs/web-audio-samples/tree/gh-pages/samples/audio/wave-tables
         }
         
         osc.frequency.value = freq;
-        osc.start();
-        if (duration !== undefined) {
-            osc.stop(audioContext.currentTime + duration);
+        
+        if (delay === undefined) {
+            delay = 0;
+        }
+        if (duration === undefined) {
+            // 120 bpm, 1 note
+            duration = 0.5;
         }
         
+        osc.start(audioContext.currentTime + delay);
+        osc.stop(audioContext.currentTime + delay + duration);
+
         oscList[octave][note] = osc;
         return osc;
     };
@@ -193,7 +207,6 @@ var HestiaAudio = module.exports = function() {
             let osc = oscList[octave][note];
             if (osc) {
                 osc.stop();
-                // Q: Do we need to call delete on the osc? 
             }
         }
     };
@@ -213,9 +226,6 @@ var HestiaAudio = module.exports = function() {
         // i) visualise
         // ii) allow configuration of custom wave forms
         // I wonder if samples in Mod trackers are created this way?
-        
-        // Here are some tasy wavetables:
-        // https://github.com/GoogleChromeLabs/web-audio-samples/tree/gh-pages/samples/audio/wave-tables
         
         for (let i = 0; i < noteTable.length; i++) {
             oscList[i] = [];
@@ -376,8 +386,12 @@ Hestia.init = function(config) {
 		loadSpriteSheet(config.spriteSheet.path, config.spriteSheet.spriteSize);
 	}
 	
-	// Set Fonts
-	currentFont = fonts["micro"];
+	// Set Font
+	if (config.font && config.font.path) {
+	    loadFont(config.font);
+	} else {
+    	currentFont = fonts["micro"];
+	}
 
 	// Set Tick Functions
 	if (config.update) {
@@ -482,9 +496,30 @@ var loadSpriteSheet = Hestia.loadSpriteSheet = function(path, spriteSize) {
 		    }
 		}, 60);
 	}).catch(function(error) {
-		console.log("Load Sprite Sheet Failed: " + error.message);
+		console.error("Load Sprite Sheet Failed: " + error.message);
 		lockCount -= 1;
 	});
+};
+
+var loadFont = Hestia.loadFont = function(font) {
+    lockCount += 1;
+    fontSheet = new Image();
+    fetch(font.path).then(function(response) {
+        return response.blob();
+    }).then(function(blob) {
+        fontSheet.src = URL.createObjectURL(blob);
+        let pollId = window.setInterval(function(){
+            // Hack to wait for src to finish
+            if (fontSheet.width > 0) {
+                createFontJson(fontSheet, font.name, font.alphabet, font.width, font.height, font.spacing);
+                lockCount -= 1;
+                window.clearInterval(pollId);
+            }
+        }, 60);
+    }).catch(function(error) {
+        console.error("Load Font Failed: " + error.message);
+        lockCount -= 1;
+    });
 };
 
 var loadPalette = Hestia.loadPalette = function(path, callback) {
@@ -566,7 +601,8 @@ var drawText = Hestia.drawText = function(text, x, y, c) {
 		}
 		for (var p = 0; p < n; p++) {
 			if (currentFont[letter][p]) {
-				ctx.fillRect(x + i * (currentFont.width + currentFont.spacing) + p % currentFont.width, y + Math.floor(p / currentFont.width), 1, 1);
+				ctx.fillRect(
+				    x + i * (currentFont.width + currentFont.spacing) + p % currentFont.width, y + Math.floor(p / currentFont.width), 1, 1);
 			}
 		}
 	}
@@ -636,8 +672,51 @@ var palettiseSpriteSheet = function(spriteSheet, palette, transparencyIndex) {
         }
         paletteSprites[idx] = spriteIndicies;
     }
-    
 };
+
+var createFontJson = function(spriteSheet, name, alphabet, w, h, spacing) {
+    if (!palettiseCanvas) {
+        palettiseCanvas = document.createElement("canvas");
+        document.body.appendChild(palettiseCanvas);
+        palettiseCanvas.style = "display: none";
+    }
+    let font = {
+        width: w,
+        height: h,
+        spacing: spacing
+    };
+    
+    w = w + spacing;
+    h = h + spacing;
+
+	palettiseCanvas.width = w;
+    palettiseCanvas.height = h;
+    let ctx = palettiseCanvas.getContext('2d');
+
+    let spriteCount = alphabet.length;
+    
+    for (let i = 0; i < spriteCount; i++) {
+        let sx = (i*w)%spriteSheet.width, 
+    		sy = h * Math.floor((i*w)/spriteSheet.width);
+    	ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(spriteSheet, sx, sy, w, h, 0, 0, w, h);
+
+        let data = ctx.getImageData(0, 0, w - spacing, h - spacing).data;
+        // TODO: Update font rendering to read the spacing
+        let charData = []
+        for(let j = 0, n = data.length; j < n; j += 4) {
+            let alpha = data[j+3]
+            if (alpha > 0) {
+                charData.push(1);
+            } else {
+                charData.push(0);
+            }
+        }
+        font[alphabet[i]] = charData;
+    }
+    fonts[name] = font;
+    currentFont = font; 
+}
 
 Hestia.palette = function() {
 	return palette;

@@ -1,13 +1,16 @@
+var testBox;
 
 var init = function() {
+    testBox = TextBox.create(32, 32, ["ABCDEFGHIJKLM ", "NOPQRSTUVWXYZ_", "abcdefghijklm", "nopqrstuvwxyz"], 0, 3);
 };
 
 var update = function() {
-
+    testBox.update();
 };
 
 var draw = function() {
 	Hestia.clear(3);
+	testBox.draw();
 	//drawPalette(0,0,1);
 };
 
@@ -24,6 +27,14 @@ var config = {
 	"pixelRatio": 4,
 	"tickRate": 30,
 	"palette": "palettes/andrade-gameboy.json",
+	"font": {
+	    "name": "mini",
+	    "path": "images/mini-font-offset.png",
+	    "width": 5,
+	    "height": 7,
+	    "spacing": 1,
+	    "alphabet":  "ABCDEFGHIJKLMNOPQRSTUVabcdefghijklmnopqrstuvWXYZ0123456789_.,!?:; wxyz()[]{}'\"/\\|=-+*<>"
+	},
 	/*"spriteSheet": { 
 		"path": "", 
 		"spriteSize": 32
@@ -66,8 +77,8 @@ var TextBox = (function(){
 		index: 0,
 		select: false,
 		boxed: true,
-		charWidth: 4,	// Technically this comes from font but only one font atm
-		charHeight: 6,	// ^^ as above
+		charWidth: 6,	// Technically this comes from font but only one font atm
+		charHeight: 8,	// ^^ as above
 		color: 0,
 		bgColor: 21,
 		draw: function() {

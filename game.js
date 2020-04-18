@@ -1,5 +1,6 @@
 var actionsBox, currentReactionBox;
 var creature;
+var debug = true;
 
 var uiElements = [];
 var addUIElement = function(uiElement){
@@ -34,7 +35,26 @@ var resetRoutines = function() {
 
 var Creature = (function() {
     var exports = {};
-    var proto = {};
+    var proto = {
+    };
+    
+    exports.calculateHighestEmotionalNeed = function(creature) {
+        let emotions = creature.def.emotions;
+        let highestEmotionId = "";
+        let highestEmotionPriority = 0;
+        let highestValue = "";
+        for(let i = 0, l = emotions.length; i < l; i++) {
+            let emotionId = emotions[i];
+            let attention = creature.getEmotionalAttentionNeed(emotionId);
+            // This tie break probably wants to be inverted if attention need is 'negative' (i.e. < 2)
+            if (highestValue < attention || (highestValue == attention && emotions[i].priority > highestEmotionPriority)) {
+                highestEmotionId = emotionId;
+                highestEmotionPriority = emotions[i].priority;
+                highestValue = attention;
+            }
+        }
+        return highestEmotionId;
+    };
     
     exports.create = function(def) {
         var creature = Object.create(proto);
@@ -60,6 +80,30 @@ var Creature = (function() {
             }
         }
         
+        creature.mood = {
+            emotionId: "",
+            category: -1,
+            priority: -1,
+            desc: ""
+        }
+        
+        creature.getEmotionalAttentionNeed = function(id, invert) {
+            let value = creature.emotions[id].value;
+            let attention = 0;
+            if (value > 30) {
+                attention = 4;
+            } else if (value > 10) {
+                attention = 3;
+            } else if (value > -10) {
+                attention = 2;
+            } else if (value > -30) {
+                attention = 1;
+            } else {
+                attention = 0;
+            }
+            return invert ? 4 - attention : attention;
+        };
+        
         creature.changeNeed = function(id, delta) {
             let need = creature.needs[id];
             if (need) {
@@ -81,7 +125,7 @@ var Creature = (function() {
                 let need = creature.needs[id];
                 creature.changeNeed(id, need.growth);
             }
-            def.update(creature);  
+            creature.def.update(creature);  
         };
         creature.interact = function(action) {
             return def.responses(creature, action);
@@ -91,6 +135,8 @@ var Creature = (function() {
             def.draw(creature);
         };
         
+        def.init(creature);
+        
         return creature;
     };
     return exports;
@@ -98,20 +144,39 @@ var Creature = (function() {
 
 var kittyDef = {
     needs: [
+        { "id": "play", "growth": 2, "value": 40, "priority": 3 },
+        { "id": "food", "growth": 1, "value": 40, "priority": 5 }
         // TODO: Rest Need
-        // TODO: Hiearchy of needs - if same category (i.e. band) the higher need gets prio
-        { "id": "play", "growth": 2, "value": 50, "priority": 3 },
-        { "id": "food", "growth": 1, "value": 10, "priority": 5 }
     ],
     emotions: [
-        { "id": "cheer", "value": 0 },
-        { "id": "hunger", "value": 10 },
-        { "id": "playfulness", "value": 10 }
+        { "id": "cheer", "value": 0, "priority": 3, "invert": true, "moods": [ "Happy", "Content", "Indifferent", "Unhappy", "Miserable" ] },
+        { "id": "hunger", "value": 10, "priority": 5, "moods": [ "Stated", "Sleepy", "Indifferent", "Hungry", "Ravenous"] },
+        { "id": "playfulness", "value": 10, "priority": 4, "moods": [ "Asleep", "Sleepy", "Indifferent", "Playful", "Restless"] }
         // anger?
     ],
+    init: function(creature) {
+        let highestEmotionId, highestEmotionCategory = -1,  highestEmotionPriority = -1, highestEmotionDesc;
+        creature.emotionalCategories = [];
+        for (let i = 0, l = creature.def.emotions.length; i < l; i++) {
+            let emotionDef = creature.def.emotions[i];
+            let category = creature.getEmotionalAttentionNeed(emotionDef.id, emotionDef.invert);
+            creature.emotionalCategories.push(category);
+            if (category > highestEmotionCategory 
+                || (category == highestEmotionCategory && highestEmotionPriority < emotionDef.priority)) {
+                highestEmotionId = emotionDef.id;
+                highestEmotionCategory = category;
+                highestEmotionPriority = emotionDef.priority;
+                highestEmotionDesc = emotionDef.moods[category];
+            }
+        }
+        creature.mood.emotionId = highestEmotionId;
+        creature.mood.category = highestEmotionCategory;
+        creature.mood.priority = highestEmotionPriority;
+        creature.mood.desc = highestEmotionDesc;
+    },
     // TODO: Emotion -> mood state mapping
     update: function(creature) {
-        // How to turn needs into moods
+        // Turn needs into emotions
         if (creature.needs["food"].value > 50) {
             creature.changeEmotion("cheer", -2);
             creature.changeEmotion("hunger", 3);
@@ -123,9 +188,32 @@ var kittyDef = {
             creature.changeEmotion("cheer", -1);
             creature.changeEmotion("playfulness", +2);
         }
+        
+        let moodChanged = false;
+        for (let i = 0, l = creature.def.emotions.length; i < l; i++) {
+            let emotionDef = creature.def.emotions[i];
+            let previousCategory = creature.emotionalCategories[i];
+            let category = creature.getEmotionalAttentionNeed(emotionDef.id, emotionDef.invert);
+            if (category != previousCategory) {
+                creature.emotionalCategories[i] = category;
+                if (creature.mood.emotionId === emotionDef.id
+                    || creature.mood.category < category
+                    || (creature.mood.category === category && creature.mood.priority <= emotionDef.priority)) {
+                    console.log("Space Kitty became " + emotionDef.moods[category]);
+                    moodChanged = true;
+                    // TODO: Mood should be combos of emotions not highest emotional need
+                    creature.mood.emotionId = emotionDef.id;
+                    creature.mood.category = category;
+                    creature.mood.priority = emotionDef.priority;
+                    creature.mood.desc = emotionDef.moods[category];
+                }
+            }
+        }
+        // Consider weighting instead of priority (e.g. so that hungery trumps restless)
+        
         // TODO: should cheer equalise if there's no particular needs?
         // TODO: If hunger negative increase for lower food values
-        // TODO: Die if not fed for long enough - that or growth curve and die at reaching 100
+        // TODO: Reduce health if full food need, Increase (slowly if low food need)
     },
     responses: function(creature, action) {
         let desc = "";
@@ -263,28 +351,32 @@ var init = function() {
     creature = Creature.create(kittyDef);
     
     // Debug Bars
-    let createNeedValueDelegate = function(needId) {
-        return function() { return creature.needs[needId].value / 100; };
-    };
-    let needBars = [];
-    for (let i = 0, l = kittyDef.needs.length; i < l; i++) {
-        let need = kittyDef.needs[i];
-        needBars[i] = ProgressBar.create({ x: 1, y: 2 + i * 8 , width: 64, height: 3, valueDelegate: createNeedValueDelegate(need.id) });
-        needBars[i].label = need.id[0].toUpperCase();
-        needBars[i].active = true;
-        addUIElement(needBars[i]);
+    if (debug) {
+        let initialOffset = 2;
+        let createNeedValueDelegate = function(needId) {
+            return function() { return creature.needs[needId].value / 100; };
+        };
+        let needBars = [];
+        for (let i = 0, l = kittyDef.needs.length; i < l; i++) {
+            let need = kittyDef.needs[i];
+            needBars[i] = ProgressBar.create({ x: 1, y: initialOffset + i * 8 , width: 64, height: 3, valueDelegate: createNeedValueDelegate(need.id) });
+            needBars[i].label = need.id[0].toUpperCase();
+            needBars[i].active = true;
+            addUIElement(needBars[i]);
+        }
+        let createEmotionValueDelegate = function(emotionId) {
+            return function() { return (creature.emotions[emotionId].value + 50) / 100; };
+        };
+        let emotionBars = [];
+        for (let i = 0, l = kittyDef.emotions.length; i < l; i++) {
+            let emotion = kittyDef.emotions[i];
+            emotionBars[i] = ProgressBar.create({ x: 1, y: initialOffset + 2 + (i + needBars.length) * 8 , width: 64, height: 3, valueDelegate: createEmotionValueDelegate(emotion.id) })
+            emotionBars[i].label = emotion.id[0].toUpperCase();
+            emotionBars[i].active = true;
+            addUIElement(emotionBars[i]);
+        } 
     }
-    let createEmotionValueDelegate = function(emotionId) {
-        return function() { return (creature.emotions[emotionId].value + 50) / 100; };
-    };
-    let emotionBars = [];
-    for (let i = 0, l = kittyDef.emotions.length; i < l; i++) {
-        let emotion = kittyDef.emotions[i];
-        emotionBars[i] = ProgressBar.create({ x: 1, y: 4 + (i + needBars.length) * 8 , width: 64, height: 3, valueDelegate: createEmotionValueDelegate(emotion.id) })
-        emotionBars[i].label = emotion.id[0].toUpperCase();
-        emotionBars[i].active = true;
-        addUIElement(emotionBars[i]);
-    }
+    
 };
 
 
@@ -309,6 +401,9 @@ var draw = function() {
 
 	//drawPalette(0,0,2);
 	creature.draw();
+	if (creature.mood.desc) {
+	    Hestia.drawText(creature.mood.desc, config.width/2, 2, 1);
+	}
 
 	for (let i = 0, l = uiElements.length; i < l; i++) {
         if (uiElements[i].active) {
@@ -361,17 +456,21 @@ window.onload = function() {
 	Hestia.run();
 };
 
-/* Pay attention to your charge!
-var paused = false;
-window.addEventListener('focus', function(event) {
-    if (paused) {
-        Hestia.run();
-    }
-});
-window.addEventListener('blur', function(event){
-    paused = true;
-    Hestia.stop();
-});*/
+// Pay attention to your charge!
+// Only pause on non-focus for debug
+if (debug)
+{
+    var paused = false;
+    window.addEventListener('focus', function(event) {
+        if (paused) {
+            Hestia.run();
+        }
+    });
+    window.addEventListener('blur', function(event){
+        paused = true;
+        Hestia.stop();
+    });    
+}
 
 
 // Text Box 'class'

@@ -1,3 +1,28 @@
+// LUDUM DARE 46 - Keep It Alive
+var config = { 
+	"width": 160,
+	"height": 144,
+	"pixelRatio": 4,
+	"tickRate": 30,
+	"palette": "palettes/andrade-gameboy.json",
+	"font": {
+	    "name": "mini",
+	    "path": "images/mini-font-offset.png",
+	    "width": 5,
+	    "height": 7,
+	    "spacing": 1,
+	    "alphabet":  "ABCDEFGHIJKLMNOPQRSTUVabcdefghijklmnopqrstuvWXYZ0123456789_.,!?:; wxyz()[]{}'\"/\\|=-+*<>",
+	    "reducedWidthLowerCase": 1,
+	    "baselineOffsets": "gjpqy"
+	},
+	/*"spriteSheet": { 
+		"path": "", 
+		"spriteSize": 32
+	},*/
+	"keys": [ 37, 39, 38, 40, 90, 88], // left, right, up, down, z, x
+	"hideCursor": false
+};
+
 var debug = true, debugBars = false;
 
 var GameStates = {
@@ -13,9 +38,12 @@ var gameState = -1;
 // JOURNEY State 
 var actionsBox, currentReactionBox, journeyProgressBar, moodText, scoreText;
 var debugBarUIs = [];
-var journeyTick = 0, journeyLength = 30 * 1; // 120;
+var journeyTick = 0, journeyLength = config.tickRate * 120;
+var interactionMessageShowTime = 3;
 var score = 0, journeysComplete = 0, tourLength = 3;
-var creature, creatureUpdateInterval = 30;    // Note - setting this lower increase impact of message duration effect
+var creature, creatureUpdateInterval = config.tickRate;
+var pauseSim;
+
 var toggleDebugUI = function(value) {
     if (debug && debugBars) {
         for (let i = 0, l = debugBarUIs.length; i < l; i++) {
@@ -82,6 +110,8 @@ var Creature = (function() {
     
     exports.create = function(def) {
         var creature = Object.create(proto);
+        let nameIndex = Math.floor(Math.random() * def.names.length);
+        creature.name = def.names[nameIndex];
         creature.health = def.health;
         creature.def = def;
         creature.needs = {};
@@ -158,6 +188,29 @@ var Creature = (function() {
         creature.interact = function(action) {
             return def.responses(creature, action);
         };
+        creature.recalculateMood = function() {
+            let moodChanged = false;
+            for (let i = 0, l = creature.def.emotions.length; i < l; i++) {
+                let emotionDef = creature.def.emotions[i];
+                let previousCategory = creature.emotionalCategories[i];
+                let category = creature.getEmotionalAttentionNeed(emotionDef.id, emotionDef.invert);
+                if (category != previousCategory || creature.mood.category < category) {
+                    creature.emotionalCategories[i] = category;
+                    if (creature.mood.emotionId === emotionDef.id
+                        || creature.mood.category < category
+                        || (creature.mood.category === category && creature.mood.priority <= emotionDef.priority)) {
+                        moodChanged = true;
+                        // TODO: Mood should be combos of emotions not highest emotional need
+                        creature.mood.emotionId = emotionDef.id;
+                        creature.mood.category = category;
+                        creature.mood.priority = emotionDef.priority;
+                        creature.mood.desc = emotionDef.moods[category];
+                    }
+                }
+            }
+            // Consider weighting instead of priority (e.g. for Kitty would like hungry to trump restless)
+            return moodChanged;
+        };
         
         creature.draw = function() {
             def.draw(creature);
@@ -171,6 +224,7 @@ var Creature = (function() {
 })();
 
 var kittyDef = {
+    names: [ "Floofmiester", "Prof. Jiggly", "Fuzzy Boots", "Beans" ],
     health: 100,
     needs: [
         { "id": "play", "growth": 2, "value": 40, "priority": 3 },
@@ -191,23 +245,23 @@ var kittyDef = {
             switch(happiness){
                 case 4:
                 case 3:
-                    desc = "They seem to have had a great time!"
+                    desc = creature.name + "seems to have had a great time!"
                     break;
                 case 2:
-                    desc = "Thanks for taking care of my pet";
+                    desc = "Thanks for taking care of " + creature.name;
                     break;
                 case 1:
                 case 0:
                 default:
-                    desc = "Space kitty seems glad to be off the ship";
+                    desc = creature.name + " seems glad to be off the ship";
                     break;
             }
         } else if (creature.health > 50) {
-            desc = "They don't seem to be in the best of health";
+            desc = creature.name + "doesn't seem to be in the best of health";
         } else if (creature.health > 0) {
             desc = "What have you done to my kitty?";
         } else {
-            desc = "What!? They're dead. The revival fees are coming out of your pocket!";
+            desc = "What!? " + creature.health + " is dead. The revival fees are coming out of your pocket!";
         }
         return desc;
     },
@@ -245,10 +299,12 @@ var kittyDef = {
             creature.changeEmotion("cheer",-1);
             creature.changeEmotion("playfulness", +3);
         } else if (creature.needs["play"].value > 50) {
-            creature.changeEmotion("cheer", -1);
-            creature.changeEmotion("playfulness", +2);
+            creature.changeEmotion("playfulness", +1);
         }
         
+        // Emotions
+        // Should equalise to some base value if needs are low
+
         // Starvation
         if (creature.needs["food"].value == 100) {
             creature.health -= 2;
@@ -264,71 +320,61 @@ var kittyDef = {
             creature.health += 1;
         }
         
-        // TODO: Move to base class
-        let moodChanged = false;
-        for (let i = 0, l = creature.def.emotions.length; i < l; i++) {
-            let emotionDef = creature.def.emotions[i];
-            let previousCategory = creature.emotionalCategories[i];
-            let category = creature.getEmotionalAttentionNeed(emotionDef.id, emotionDef.invert);
-            if (category != previousCategory || creature.mood.category < category) {
-                creature.emotionalCategories[i] = category;
-                if (creature.mood.emotionId === emotionDef.id
-                    || creature.mood.category < category
-                    || (creature.mood.category === category && creature.mood.priority <= emotionDef.priority)) {
-                    moodChanged = true;
-                    // TODO: Mood should be combos of emotions not highest emotional need
-                    creature.mood.emotionId = emotionDef.id;
-                    creature.mood.category = category;
-                    creature.mood.priority = emotionDef.priority;
-                    creature.mood.desc = emotionDef.moods[category];
-                }
-            }
-        }
-        // Consider weighting instead of priority (e.g. so that hungry trumps restless)
+        creature.recalculateMood();
         
-        
-        // TODO: should cheer equalise if there's no particular needs (yes - to some base line)
-        // TODO: If hunger negative increase for lower food values (i.e. it should track back to 0)
-        // TODO: Reduce health if full food need, Increase (slowly if low food need)
     },
     responses: function(creature, action) {
+        // TODO: Replace "space kitty" with creature.name
+        let result = {};
         let desc = "";
+        let duration = interactionMessageShowTime * config.tickRate;
         if (creature.health == 0) {
-            return "The space kitty is dead";
+            return {
+                duration: duration,
+                desc: "The space kitty is dead"
+            }
         }
         
         switch(action.name) {
             case "feed":
             {
+                duration = 60;
                 let hunger = creature.emotions["hunger"].value;
                 if (hunger > -10) { // i.e. neutral, quite or very
                     creature.changeNeed("food", -50);
                     creature.changeEmotion("hunger", -30);
                     if (hunger > 30) {
-                        desc = "Space kitty devours the food";
+                        duration = 30;
+                        desc = creature.name + " devours the food";
                     } else if (hunger > 10) {
                         creature.changeEmotion("cheer", 20);
-                        desc = "Space kitty happily eats the food";
+                        desc = creature.name + " happily eats the food";
+                        // TODO: Remove reference to happiness unless you're going to look up cheer
                     } else {
-                        desc = "Space kitty picks at the food";
+                        duration = 90;
+                        desc = creature.name + " picks at the food";
                     }
                 } else {
                     let playfulness = creature.emotions["playfulness"].value;
                     if (playfulness > 10) {
-                        desc = "Space kitty stares at you and meows";
+                        duration = 30;
+                        desc = creature.name + " stares at you and meows";
                     } else {
-                        desc = "Space kitty goes to sleep";
+                        duration = 30;
+                        desc = creature.name + " goes to sleep";
                     }
                 }
                 break;
             }
             case "play":
             {
+                duration = 90
                 let hunger = creature.emotions["hunger"].value;
                 if (hunger > 30) {
-                    desc = "Space kitty stares at you and meows";
+                    duration = 30;
+                    desc = creature.name + " stares at you and meows";
                 } else { 
-                    // TODO: base reaction on mood rather so we get hunger reactions for free
+                    // TODO: base reaction on mood so we get hunger reactions for free
                     let playfulness = creature.emotions["playfulness"].value; 
                     if (playfulness > -30) { // i.e. not really, neutral, quite, very
                         if (playfulness > 30) {
@@ -336,36 +382,38 @@ var kittyDef = {
                             creature.changeEmotion("playfulness", -30);
                             creature.changeEmotion("cheer", 20);
                             creature.changeEmotion("hunger", 10);
-                            desc = "Space kitty plays enthusiastically";
+                            desc = creature.name + " plays enthusiastically";
                         } else if (playfulness > 10) {
                             creature.changeNeed("play", -20);
                             creature.changeEmotion("playfulness", -30);
                             creature.changeEmotion("cheer", 15);
-                            desc = "Space kitty plays with you";
+                            desc = creature.name + " plays with you";
                         } else if (playfulness > -10) {
                             creature.changeNeed("play", -10);
                             creature.changeEmotion("playfulness", -30);
                             creature.changeEmotion("cheer", 5);
-                            desc = "Space kitty plays idly";
+                            duration = 60;
+                            desc = creature.name + " plays idly";
                         } else {
                             creature.changeNeed("play", -5);
                             creature.changeEmotion("playfulness", -30);
-                            desc = "Space kitty bats the toy once and lies down";
+                            duration = 30;
+                            desc = creature.name + " bats the toy once and lies down";
                         }
                     } else {
-                       desc = "Space kitty ignores you";
+                        duration = 0;
+                        desc = creature.name + " ignores you";
                     }
                 }
                 break;
             }
             default:
-                desc = "Space kitty stares at you";
+                desc = creature.name + " stares at you";
+                duration = 30;
                 break;
         }
-        
-        // TODO: Recalucluate Mood
-        
-        return desc;    // Can we return duration too? Currently issue that play need decreases at less than the growth + duration (this is an arguement for growth curves though)
+
+        return { desc: desc, duration: duration };
     },
     draw: function(creature) {
         // Sprite please
@@ -377,7 +425,16 @@ var kittyDef = {
 // TODO: Move actions + interaction to class / protype
 var interaction = function(index) { // TODO: Context / Options
     let interactionResult = creature.interact(actions[index]);
-    showMessageBox(interactionResult, actions[index].duration)
+    pauseSim = true;
+    showMessageBox(interactionResult.desc, interactionMessageShowTime, function(){
+        let moodChanged = creature.recalculateMood();
+        runSimStep(interactionResult.durtion);
+        // ^^ Might be better to try to spread this, however this way has the nice
+        // effect of not updating the mood until after the interaction is complete
+        // but before running the extra sim steps (once we make moods have a min. time
+        // this will be more important).
+        pauseSim = false;
+    })
 };
 
 var showMessageBox = function(text, duration, callback) {
@@ -404,13 +461,11 @@ var showMessageBox = function(text, duration, callback) {
 var actions = [{
     name: "play",
     desc: "Play",
-    interaction: function() { interaction(0); },
-    duration: 3
+    interaction: function() { interaction(0); }
 },{
     name: "feed",
     desc: "Feed",
-    interaction: function() { interaction(1); },
-    duration: 3
+    interaction: function() { interaction(1); }
 }]; // Contextual Actions?
 
 var init = function() {
@@ -446,7 +501,7 @@ var init = function() {
     
     moodText = {
         x: config.width - 1,
-        y: 32,
+        y: 7,
         color: 1,
         text: "",
         update: function() {
@@ -463,12 +518,12 @@ var init = function() {
     addUIElement(moodText);
     
     scoreText = {
-        x: 1,
-        y: 6,
+        x: 2,
+        y: 7,
         color: 0,
         text: "",
         update: function() {
-            this.text = "" + score + "/" + journeysComplete;
+            this.text = "" + (journeysComplete - score) + "deaths";
         },
         draw: function() {
             Hestia.drawText(this.text, this.x, this.y, this.color);
@@ -593,17 +648,27 @@ var setGameState = function(index) {
     }
 };
 
+var runSimStep = function(count) {
+    let stepsTaken = 0;
+    while (stepsTaken < count && journeyTick < journeyLength) {
+        stepsTaken += 1;
+        journeyTick += 1;
+        if (journeyTick % creatureUpdateInterval === 0) {
+            creature.update();
+        }
+    }
+};
+
 var update = function() {
     updateRoutines();
     
     if (gameState == GameStates.JOURNEY) {
-        if (journeyTick < journeyLength) {
-            journeyTick += 1;
-            if (journeyTick % creatureUpdateInterval === 0) {
-                creature.update();
-            }
-        } else {
-            setGameState(GameStates.JOURNEY_COMPLETE);
+        if (!pauseSim) {
+            if (journeyTick >= journeyLength) {
+                setGameState(GameStates.JOURNEY_COMPLETE);
+            } else {
+                runSimStep(1);
+            }         
         }
     }
 
@@ -626,30 +691,6 @@ var draw = function() {
             uiElements[i].draw();
         }
     }
-};
-
-var config = { 
-	"width": 160,
-	"height": 144,
-	"pixelRatio": 4,
-	"tickRate": 30,
-	"palette": "palettes/andrade-gameboy.json",
-	"font": {
-	    "name": "mini",
-	    "path": "images/mini-font-offset.png",
-	    "width": 5,
-	    "height": 7,
-	    "spacing": 1,
-	    "alphabet":  "ABCDEFGHIJKLMNOPQRSTUVabcdefghijklmnopqrstuvWXYZ0123456789_.,!?:; wxyz()[]{}'\"/\\|=-+*<>",
-	    "reducedWidthLowerCase": 1,
-	    "baselineOffsets": "gjpqy"
-	},
-	/*"spriteSheet": { 
-		"path": "", 
-		"spriteSize": 32
-	},*/
-	"keys": [ 37, 39, 38, 40, 90, 88], // left, right, up, down, z, x
-	"hideCursor": false
 };
 
 window.onload = function() {

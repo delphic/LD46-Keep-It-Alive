@@ -1,7 +1,12 @@
 var actionsBox;
 var currentReaction;
-var uiElements = [];
 var creature;
+
+var uiElements = [];
+var addUIElement = function(uiElement){
+    uiElement.index = uiElements.length;
+    uiElements.push(uiElement);
+};
 
 var routines = [], routineStarts = [], routineTick = 0;
 var addRoutine = function(predicate) {
@@ -102,7 +107,7 @@ var kittyDef = {
         { "id": "cheer", "value": 0 },
         { "id": "hunger", "value": 10 },
         { "id": "playfulness", "value": 10 }
-        // Plafulness and anger?
+        // anger?
     ],
     // TODO: Emotion -> mood state mapping
     update: function(creature) {
@@ -214,15 +219,14 @@ var interaction = function(index) { // TODO: Context / Options
    });
 };
 
-
 var actions = [{
     name: "play",
-    description: "Play",
+    desc: "Play",
     interaction: function() { interaction(0); },
     duration: 5
 },{
     name: "feed",
-    description: "Feed",
+    desc: "Feed",
     interaction: function() { interaction(1); },
     duration: 2
 }]; // Floof?
@@ -230,37 +234,45 @@ var actions = [{
 
 
 var init = function() {
-    actionsBox = TextBox.create(3, 144 - 24, [actions[0].description, actions[1].description], 0, 3, true, [ actions[0].interaction, actions[1].interaction ]);
-    actionsBox.index = uiElements.length;
+    actionsBox = TextBox.create({ 
+        x: 3,
+        y: config.height - 24,
+        lines: [actions[0].desc, actions[1].desc],
+        color: 0,
+        bgColor: 3,
+        select: true,
+        actions: [actions[0].interaction, actions[1].interaction],
+        width: config.width - 6
+    });
     actionsBox.active = true;
-    uiElements.push(actionsBox);
+    addUIElement(actionsBox);
     creature = Creature.create(kittyDef);
     
     // Debug Bars
+    let createNeedValueDelegate = function(needId) {
+        return function() { return creature.needs[needId].value / 100; };
+    };
     let needBars = [];
     for (let i = 0, l = kittyDef.needs.length; i < l; i++) {
         let need = kittyDef.needs[i];
         needBars[i] = ProgressBar.create({ x: 1, y: 1 + i * 4 , width: 64, height: 1, valueDelegate: createNeedValueDelegate(need.id) });
         needBars[i].label = need.id;
         needBars[i].active = true;
-        uiElements.push(needBars[i]);
+        addUIElement(needBars[i]);
     }
+    let createEmotionValueDelegate = function(emotionId) {
+        return function() { return (creature.emotions[emotionId].value + 50) / 100; };
+    };
     let emotionBars = [];
     for (let i = 0, l = kittyDef.emotions.length; i < l; i++) {
         let emotion = kittyDef.emotions[i];
         emotionBars[i] = ProgressBar.create({ x: 1, y: 3 + (i + needBars.length) * 4 , width: 64, height: 1, valueDelegate: createEmotionValueDelegate(emotion.id) })
         emotionBars[i].label = emotion.id;
         emotionBars[i].active = true;
-        uiElements.push(emotionBars[i]);
+        addUIElement(emotionBars[i]);
     }
 };
 
-var createNeedValueDelegate = function(needId) {
-    return function() { return creature.needs[needId].value / 100; };
-}
-var createEmotionValueDelegate = function(emotionId) {
-    return function() { return (creature.emotions[emotionId].value + 50) / 100; };
-};
 
 var journeyTick = 0, creatureUpdateRate = 30;
 var update = function() {
@@ -341,7 +353,7 @@ window.onload = function() {
 	Hestia.run();
 };
 
-
+/* Pay attention to your charge!
 var paused = false;
 window.addEventListener('focus', function(event) {
     if (paused) {
@@ -351,7 +363,7 @@ window.addEventListener('focus', function(event) {
 window.addEventListener('blur', function(event){
     paused = true;
     Hestia.stop();
-});
+});*/
 
 
 // Text Box 'class'
@@ -415,7 +427,7 @@ var TextBox = (function(){
 			}
 		},
 		recalculateDimensions: function() {
-			this.w = this.calculateMinWidth();
+			this.w = this.width ? this.width : this.calculateMinWidth();
 			this.h = this.calculateMinHeight();
 		},
 		calculateMinWidth: function() {
@@ -438,17 +450,17 @@ var TextBox = (function(){
 		}
 	};
 
-	// Could probably take parameters object as it's a create
-	var create = function(x, y, lines, color, bgColor, select, actions, cancelAction) {
+	var create = function(params) {
 		var textBox = Object.create(proto);
-		textBox.x = x;
-		textBox.y = y;
-		textBox.lines = lines;
-		textBox.color = color;
-		textBox.bgColor = bgColor;
-		textBox.select = select;
-		textBox.actions = actions;
-		textBox.cancelAction = cancelAction;
+		textBox.x = params.x;
+		textBox.y = params.y;
+		textBox.lines = params.lines;
+		textBox.color = params.color;
+		textBox.bgColor = params.bgColor;
+		textBox.select = params.select;
+		textBox.actions = params.actions;
+		textBox.cancelAction = params.cancelAction;
+		textBox.width = params.width;
 		textBox.dirty = true;
 		return textBox;
 	};

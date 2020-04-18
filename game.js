@@ -1,5 +1,4 @@
-var actionsBox;
-var currentReaction;
+var actionsBox, currentReactionBox;
 var creature;
 
 var uiElements = [];
@@ -99,6 +98,7 @@ var Creature = (function() {
 
 var kittyDef = {
     needs: [
+        // TODO: Rest Need
         // TODO: Hiearchy of needs - if same category (i.e. band) the higher need gets prio
         { "id": "play", "growth": 2, "value": 50, "priority": 3 },
         { "id": "food", "growth": 1, "value": 10, "priority": 5 }
@@ -118,10 +118,10 @@ var kittyDef = {
         }
         if (creature.needs["play"].value > 80) {
             creature.changeEmotion("cheer",-1);
-            creature.changeEmotion("playfulness", +2);
+            creature.changeEmotion("playfulness", +3);
         } else if (creature.needs["play"].value > 50) {
             creature.changeEmotion("cheer", -1);
-            creature.changeEmotion("playfulness", +1);
+            creature.changeEmotion("playfulness", +2);
         }
         // TODO: should cheer equalise if there's no particular needs?
         // TODO: If hunger negative increase for lower food values
@@ -203,20 +203,25 @@ var kittyDef = {
     }
 };
 
-// TODO: Move to class / protype
+// TODO: Move actions + interaction to class / protype
 var interaction = function(index) { // TODO: Context / Options
-   currentReaction = creature.interact(actions[index]);
-   actionsBox.active = false;
-   let duration = actions[index].duration;
-   addRoutine(function(ticks) {
+    let interactionResult = creature.interact(actions[index]);
+    currentReactionBox.lines = TextBox.calculateLines(
+        interactionResult,
+        currentReactionBox.width - 2 * currentReactionBox.padding);
+    currentReactionBox.dirty = true;
+    currentReactionBox.active = true;
+    actionsBox.active = false;
+    let duration = actions[index].duration;
+    addRoutine(function(ticks) {
        // show progress bar for action
        if (ticks > 30 * duration) {
-           currentReaction = "";
+           currentReactionBox.active = false;
            actionsBox.active = true;
            return true;
        }
        return false;
-   });
+    });
 };
 
 var actions = [{
@@ -231,8 +236,6 @@ var actions = [{
     duration: 2
 }]; // Floof?
 
-
-
 var init = function() {
     actionsBox = TextBox.create({ 
         x: 3,
@@ -246,6 +249,17 @@ var init = function() {
     });
     actionsBox.active = true;
     addUIElement(actionsBox);
+    
+    currentReactionBox = TextBox.create({
+        x: 3,
+        y: config.height - 24,
+        color: 0,
+        bgColor: 3,
+        width: config.width - 6
+    });
+    currentReactionBox.active = false;
+    addUIElement(currentReactionBox);
+    
     creature = Creature.create(kittyDef);
     
     // Debug Bars
@@ -255,8 +269,8 @@ var init = function() {
     let needBars = [];
     for (let i = 0, l = kittyDef.needs.length; i < l; i++) {
         let need = kittyDef.needs[i];
-        needBars[i] = ProgressBar.create({ x: 1, y: 1 + i * 4 , width: 64, height: 1, valueDelegate: createNeedValueDelegate(need.id) });
-        needBars[i].label = need.id;
+        needBars[i] = ProgressBar.create({ x: 1, y: 2 + i * 8 , width: 64, height: 3, valueDelegate: createNeedValueDelegate(need.id) });
+        needBars[i].label = need.id[0].toUpperCase();
         needBars[i].active = true;
         addUIElement(needBars[i]);
     }
@@ -266,8 +280,8 @@ var init = function() {
     let emotionBars = [];
     for (let i = 0, l = kittyDef.emotions.length; i < l; i++) {
         let emotion = kittyDef.emotions[i];
-        emotionBars[i] = ProgressBar.create({ x: 1, y: 3 + (i + needBars.length) * 4 , width: 64, height: 1, valueDelegate: createEmotionValueDelegate(emotion.id) })
-        emotionBars[i].label = emotion.id;
+        emotionBars[i] = ProgressBar.create({ x: 1, y: 4 + (i + needBars.length) * 8 , width: 64, height: 3, valueDelegate: createEmotionValueDelegate(emotion.id) })
+        emotionBars[i].label = emotion.id[0].toUpperCase();
         emotionBars[i].active = true;
         addUIElement(emotionBars[i]);
     }
@@ -295,12 +309,6 @@ var draw = function() {
 
 	//drawPalette(0,0,2);
 	creature.draw();
-
-    if (currentReaction) {
-        // Show hot key in hestia to show grid lines with labels would be nice
-        // TODO: Wrapping text / text box 
-        Hestia.drawText(currentReaction, 3, 100, 1);
-    }
 
 	for (let i = 0, l = uiElements.length; i < l; i++) {
         if (uiElements[i].active) {
@@ -398,7 +406,7 @@ var TextBox = (function(){
 			}
 			
 			for(var i = 0; i < lines.length; i++) {
-				Hestia.drawText(lines[i], x+padding + indent, y + padding + (spacing + charHeight)*i, c);
+				Hestia.drawText(lines[i], x + padding + indent, y + padding + (spacing + charHeight)*i, c);
 				
 				if (select && i == index) {
 					var px = x + padding;
@@ -449,6 +457,22 @@ var TextBox = (function(){
 			return 2 * this.padding + this.lines.length*(this.charHeight+this.spacing) - (this.spacing+1);
 		}
 	};
+	
+	var calculateLines = function(text, width) {
+	    var lines = [];
+	    var words = text.split(' ');
+	    var line = "", newline = "";
+	    while (words.length > 0) {
+	        let newLine = words[0];
+	        while(words.length > 0 && (!line || Hestia.measureText(newLine) < width)) {
+                words.splice(0, 1);
+	            line = newLine;
+	            newLine += " " + words[0];
+	        }
+	        lines.push(line);
+	    }
+	    return lines;
+	};
 
 	var create = function(params) {
 		var textBox = Object.create(proto);
@@ -461,11 +485,12 @@ var TextBox = (function(){
 		textBox.actions = params.actions;
 		textBox.cancelAction = params.cancelAction;
 		textBox.width = params.width;
+		// TODO: Explicit height option (+ scrolling)
 		textBox.dirty = true;
 		return textBox;
 	};
 
-	return { create: create };
+	return { create: create, calculateLines: calculateLines };
 })();
 
 var ProgressBar = (function() {
@@ -482,9 +507,14 @@ var ProgressBar = (function() {
             this.value = this.getValue();
         },
         draw: function() {
-            Hestia.drawRect(this.x, this.y, this.width + 2 * this.borderSize, this.height + 2 * this.borderSize, this.borderColor);
+            let xOffset = 0;
+            if (this.label) {
+                Hestia.drawText(this.label, this.x, this.y - 1, this.borderColor); // TODO: Do centre calc rather than just -1
+                xOffset = Hestia.measureText(this.label) + 1; // Could probably make drawText return width
+            }
+            Hestia.drawRect(xOffset + this.x, this.y, this.width + 2 * this.borderSize, this.height + 2 * this.borderSize, this.borderColor);
             if (this.value > 0) {
-                Hestia.fillRect(this.x + this.borderSize, this.y + this.borderSize, Math.floor(this.value * this.width), this.height, this.barColor);
+                Hestia.fillRect(xOffset + this.x + this.borderSize, this.y + this.borderSize, Math.floor(this.value * this.width), this.height, this.barColor);
             }
         }
     };

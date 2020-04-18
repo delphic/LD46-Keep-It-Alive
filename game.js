@@ -1,17 +1,205 @@
-var testBox;
+var actionsBox;
+var currentReaction;
+var uiElements = [];
+var creature;
 
-var init = function() {
-    testBox = TextBox.create(32, 32, ["ABCDEFGHIJKLM ", "NOPQRSTUVWXYZ_", "abcdefghijklm", "nopqrstuvwxyz"], 0, 3);
+var Creature = (function() {
+    var exports = {};
+    var proto = {};
+    
+    exports.create = function(def) {
+        var creature = Object.create(proto);
+
+        creature.def = def;
+        creature.needs = {};
+        if (def.needs) {
+            for (let i = 0, l = def.needs.length; i < l; i++) {
+                let need = def.needs[i];
+                creature.needs[need.id] = { 
+                    value: need.value, 
+                    growth: need.growth
+                };
+            }
+        }
+        creature.emotions = {};
+        if (def.emotions) {
+            for (let i = 0, l = def.emotions.length; i < l; i++) {
+                let emotion = def.emotions[i];
+                creature.emotions[emotion.id] = {
+                    value: emotion.value
+                };
+            }
+        }
+        
+        creature.changeNeed = function(id, delta) {
+            let need = creature.needs[id];
+            if (need) {
+                need.value = Math.max(Math.min(need.value + delta, 100), 0);
+            } else {
+                console.log("Unable to find need of " + id);
+            }
+        };
+        creature.changeEmotion = function(id, delta) {
+            let emotion = creature.emotions[id];
+            if (emotion) {
+                emotion.value = Math.max(Math.min(emotion.value + delta, 50), -50);
+            }
+        };
+        creature.update = function() {
+            // Update Needs
+            for (let i = 0, l = creature.def.needs.length; i < l; i++) {
+                let id = creature.def.needs[i].id;
+                let need = creature.needs[id];
+                creature.changeNeed(id, need.growth);
+            }
+            def.update(creature);  
+        };
+        creature.interact = function(action) {
+            return def.responses(creature, action);
+        };
+        
+        creature.draw = function() {
+            def.draw(creature);
+        };
+        
+        return creature;
+    };
+    return exports;
+})();
+
+var kittyDef = {
+    needs: [
+        { "id": "play", "growth": 5, "value": 50 },
+        { "id": "food", "growth": 1, "value": 10 }
+    ],
+    emotions: [
+        { "id": "cheer", "value": 0 },
+        { "id": "hunger", "value": 10 }
+    ],
+    // TODO: Emotion -> mood state mapping
+    update: function(creature) {
+        // How to turn needs into moods
+        if (creature.needs["food"].value > 50) {
+            creature.changeEmotion("cheer", -2);
+            creature.changeEmotion("hunger", 5);
+        }
+        if (creature.needs["play"].value > 80) {
+            creature.changeEmotion("cheer",-2);
+        } else if (creature.needs["play"].value > 50) {
+            creature.changeEmotion("cheer", -1);
+        }
+    },
+    responses: function(creature, action) {
+        let desc = "";
+        switch(action.name) {
+            case "feed":
+                creature.changeNeed("food", -50);
+                desc = "Space kitty devours the food"; // TODO: dependent on hunger levels
+                break;
+            case "play":
+                creature.changeNeed("play", -25);
+                creature.changeEmotion("cheer", 20);
+                desc = "Space kitty is amused"; // TODO: dependent on anger / plafulness
+                break;
+            default:
+                desc = "Space kitty stares at you";
+                break;
+        }
+        return desc;
+    },
+    draw: function(creature) {
+        // Sprite please
+        Hestia.fillRect((160/2) - 16, (144/2)-32, 32, 32, 1);
+    }
 };
 
+var actions = [{
+    name: "feed",
+    description: "Feed"
+    /* TODO: Options */
+}, {
+    name: "play",
+    description: "Play"
+    /* TODO: Options */
+}];
+
+var reactionTimeoutId = -1;
+var setCurrentReaction = function(message, duration) {
+    currentReaction = message;
+    if (reactionTimeoutId >= 0) {
+        window.clearTimeout(reactionTimeoutId);
+    }
+    reactionTimeoutId = window.setTimeout(function(){ currentReaction = ""; reactionTimeoutId = -1; }, duration * 1000);
+};
+
+var init = function() {
+    actionsBox = TextBox.create(16, 144 - 24, [actions[0].description, actions[1].description], 0, 3, true, [ function(){
+        setCurrentReaction(creature.interact(actions[0]), 2);
+    }, function() {
+        setCurrentReaction(creature.interact(actions[1]), 2);
+    }]);
+    actionsBox.index = uiElements.length;
+    actionsBox.active = true;
+    uiElements.push(actionsBox);
+    creature = Creature.create(kittyDef);
+    
+    // Debug Bars
+    let needBars = [];
+    for (let i = 0, l = kittyDef.needs.length; i < l; i++) {
+        let need = kittyDef.needs[i];
+        needBars[i] = ProgressBar.create({ x: 1, y: 1 + i * 4 , width: 64, height: 1, valueDelegate: createNeedValueDelegate(need.id) });
+        needBars[i].label = need.id;
+        needBars[i].active = true;
+        uiElements.push(needBars[i]);
+    }
+    let emotionBars = [];
+    for (let i = 0, l = kittyDef.emotions.length; i < l; i++) {
+        let emotion = kittyDef.emotions[i];
+        emotionBars[i] = ProgressBar.create({ x: 1, y: 3 + (i + needBars.length) * 4 , width: 64, height: 1, valueDelegate: createEmotionValueDelegate(emotion.id) })
+        emotionBars[i].label = emotion.id;
+        emotionBars[i].active = true;
+        uiElements.push(emotionBars[i]);
+    }
+};
+
+var createNeedValueDelegate = function(needId) {
+    return function() { return creature.needs[needId].value / 100; };
+}
+var createEmotionValueDelegate = function(emotionId) {
+    return function() { return (creature.emotions[emotionId].value + 50) / 100; };
+};
+
+var journeyTick = 0, creatureUpdateRate = 30;
 var update = function() {
-    testBox.update();
+    journeyTick += 1;
+    if (journeyTick % creatureUpdateRate === 0) {
+        console.log("Creature update!");
+        creature.update();
+    }
+
+    for (let i = 0, l = uiElements.length; i < l; i++) {
+        if (uiElements[i].active) {
+            uiElements[i].update();
+        }
+    }
 };
 
 var draw = function() {
 	Hestia.clear(3);
-	testBox.draw();
-	//drawPalette(0,0,1);
+
+	//drawPalette(0,0,2);
+	creature.draw();
+
+    if (currentReaction) {
+        // Show hot key in hestia to show grid lines with labels would be nice
+        Hestia.drawText(currentReaction, 32, 144-32, 1);
+    }
+
+	for (let i = 0, l = uiElements.length; i < l; i++) {
+        if (uiElements[i].active) {
+            uiElements[i].draw();
+        }
+    }
 };
 
 var drawPalette = function(x, y, size) {
@@ -101,7 +289,7 @@ var TextBox = (function(){
 				
 				if (select && i == index) {
 					var px = x + padding;
-					var py = y + padding + (charHeight + spacing) * i + 2;
+					var py = y + padding + (charHeight + spacing) * i + Math.floor(charHeight/2) - 1;
 					Hestia.setPixel(px, py, c);
 					Hestia.setPixel(px+1, py, c);
 					Hestia.setPixel(px, py+1, c);
@@ -117,7 +305,12 @@ var TextBox = (function(){
 				if (Hestia.buttonUp(3)) {
 					this.index = (this.index + 1) % this.lines.length;
 				}
-				// TODO: Need a callback for selecting an option with a button!
+				if (Hestia.buttonUp(4) && this.actions[this.index]) {
+				    this.actions[this.index]();
+				}
+				if (Hestia.buttonUp(5) && this.cancelAction) {
+				    this.cancelAction();
+				}
 			}
 		},
 		recalculateDimensions: function() {
@@ -143,7 +336,7 @@ var TextBox = (function(){
 	};
 
 	// Could probably take parameters object as it's a create
-	var create = function(x, y, lines, color, bgColor, select) {
+	var create = function(x, y, lines, color, bgColor, select, actions, cancelAction) {
 		var textBox = Object.create(proto);
 		textBox.x = x;
 		textBox.y = y;
@@ -152,8 +345,57 @@ var TextBox = (function(){
 		textBox.bgColor = bgColor;
 		textBox.select = select;
 		textBox.recalculateDimensions();
+		textBox.actions = actions;
+		textBox.cancelAction = cancelAction;
 		return textBox;
 	};
 
 	return { create: create };
+})();
+
+var ProgressBar = (function() {
+    var proto = {
+        x: 0,
+        y: 0,
+        borderColor: 0,
+        barColor: 1,
+        borderSize: 1,
+        height: 1,
+        width: 10,
+        value: 0,
+        update: function() {
+            this.value = this.getValue();
+        },
+        draw: function() {
+            Hestia.drawRect(this.x, this.y, this.width + 2 * this.borderSize, this.height + 2 * this.borderSize, this.borderColor);
+            if (this.value > 0) {
+                Hestia.fillRect(this.x + this.borderSize, this.y + this.borderSize, Math.floor(this.value * this.width), this.height, this.barColor);
+            }
+        }
+    };
+    
+    var create = function(params) {
+        var progressBar = Object.create(proto);
+        
+        progressBar.x = params.x;
+        progressBar.y = params.y;
+        progressBar.width = params.width;
+        progressBar.height = params.height;
+        progressBar.getValue = params.valueDelegate;
+        progressBar.value = progressBar.getValue();
+        
+        if (params.borderColor !== undefined) {
+            progressBar.borderColor = params.borderColor;
+        }
+        if (params.barColor !== undefined) {
+            progressBar.barColor = params.barColor;
+        }
+        if (params.borderSize !== undefined) {
+            progressBar.borderSize = params.borderSize;
+        }
+        
+        return progressBar;
+    };
+    
+    return { create: create };
 })();

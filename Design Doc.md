@@ -16,19 +16,21 @@ Owner personality - likely hood to tip, if they care more about needs or mood.
 Habits - if you play with certain ones too much they become troublesome and the owner won't like it (and it'll cause problems for you too - if you play with them the need to play increases).
 
 ## Basic System Design
-### Needs and Mood
+### Needs and Emotions
 Needs: 0 to 100
-Moods: -50 / +50 
+Emotions: -50 / +50 
 The most extreme value is the current one.
 
 Not all creatures have all needs or all moods.
-Example Needs: Rest, Food, Exercise, Light, Bloodlust, Play, Security (converse Fear), Company
-Example Moods: Tired, Restless, Scared, Hungry (converse stated), Lonleness
+Example Needs: Rest, Food, Exercise, Light, Bloodlust, Play, Security, Company
+Example Emotions: Cheer, Energy (Tired -> Resentless), Fear (Scared -> Confident), Hunger (hungry -> stated), Lonileness (Lonely -> Content)
 
 Creatures have a cost per tick (i.e. needs than increase, moods decay), which can change based on conditions (mood, environment, your presence).
 
-When a new mood or need becomes dominant a notification is shown (or we change the sprite).
-When the dominant mood or any need enters a new threshold (25 intervals for need, +/- 10 and +/-30 for mood) a notification is shown (or we change the sprite).
+When a new emotion or need becomes dominant a notification is shown (or we change the sprite).
+When the dominant emotions or any need enters a new threshold (25 intervals for need, +/- 10 and +/-30 for mood) a notification is shown (or we change the sprite).
+
+Mood = dominant emotion (to begin with but could move to event based)
 
 ^^ We may want to play with the visibility of this, if part of the game is figuring out.
 

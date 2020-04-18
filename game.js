@@ -1,8 +1,28 @@
-var actionsBox, currentReactionBox, journeyProgressBar, moodText;
-var score = 0, journeysComplete = 0, tourLength = 3;
-var journeyTick = 0, journeyLength = 30 * 120;
-var creature, creatureUpdateInterval = 30;    // Note - setting this lower increase impact of message duration effect
 var debug = true, debugBars = false;
+
+var GameStates = {
+    BOOT: -1,
+    MAIN_MENU: 0,
+    INTRO: 1,
+    JOURNEY: 2,
+    JOURNEY_COMPLETE: 3,
+    FINAL_SCORE: 4
+};
+var gameState = -1; 
+
+// JOURNEY State 
+var actionsBox, currentReactionBox, journeyProgressBar, moodText, scoreText;
+var debugBarUIs = [];
+var journeyTick = 0, journeyLength = 30 * 1; // 120;
+var score = 0, journeysComplete = 0, tourLength = 3;
+var creature, creatureUpdateInterval = 30;    // Note - setting this lower increase impact of message duration effect
+var toggleDebugUI = function(value) {
+    if (debug && debugBars) {
+        for (let i = 0, l = debugBarUIs.length; i < l; i++) {
+            debugBarUIs[i].active = value;
+        }
+    }
+};
 
 // These should probably be in their own module
 var uiElements = [];
@@ -273,7 +293,6 @@ var kittyDef = {
     },
     responses: function(creature, action) {
         let desc = "";
-        
         if (creature.health == 0) {
             return "The space kitty is dead";
         }
@@ -391,10 +410,11 @@ var actions = [{
     name: "feed",
     desc: "Feed",
     interaction: function() { interaction(1); },
-    duration: 2
-}]; // Floof?
+    duration: 3
+}]; // Contextual Actions?
 
 var init = function() {
+    // Journey UI Init
     actionsBox = TextBox.create({ 
         x: 3,
         y: config.height - 24,
@@ -405,7 +425,6 @@ var init = function() {
         actions: [actions[0].interaction, actions[1].interaction],
         width: config.width - 6
     });
-    actionsBox.active = true;
     addUIElement(actionsBox);
     
     currentReactionBox = TextBox.create({
@@ -415,7 +434,6 @@ var init = function() {
         bgColor: 3,
         width: config.width - 6
     });
-    currentReactionBox.active = false;
     addUIElement(currentReactionBox);
     
     journeyProgressBar = ProgressBar.create({
@@ -424,11 +442,9 @@ var init = function() {
             return journeyTick / journeyLength;
         }
     });
-    journeyProgressBar.active = true;
     addUIElement(journeyProgressBar);
     
     moodText = {
-        active: true,
         x: config.width - 1,
         y: 32,
         color: 1,
@@ -446,8 +462,7 @@ var init = function() {
     };
     addUIElement(moodText);
     
-    let scoreText = {
-        active: true,
+    scoreText = {
         x: 1,
         y: 6,
         color: 0,
@@ -460,16 +475,14 @@ var init = function() {
         }
     };
     addUIElement(scoreText);
-    
-    creature = Creature.create(kittyDef);
-    
+
     // Debug Bars
     if (debug && debugBars) {
         let yOffset = 18;
         let healthBar = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: function() { return creature.health / 100; } })
         healthBar.label = "+";
-        healthBar.active = true;
         addUIElement(healthBar);
+        debugBarUIs.push(healthBar);
         yOffset += 10;
         
         let createNeedValueDelegate = function(needId) {
@@ -480,8 +493,8 @@ var init = function() {
             let need = kittyDef.needs[i];
             needBars[i] = ProgressBar.create({ x: 1, y: yOffset, width: 64, height: 3, valueDelegate: createNeedValueDelegate(need.id) });
             needBars[i].label = need.id[0].toUpperCase();
-            needBars[i].active = true;
             addUIElement(needBars[i]);
+            debugBarUIs.push(needBars[i]);
             yOffset += 8;
         }
         yOffset += 2;
@@ -494,49 +507,104 @@ var init = function() {
             let emotion = kittyDef.emotions[i];
             emotionBars[i] = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: createEmotionValueDelegate(emotion.id) })
             emotionBars[i].label = emotion.id[0].toUpperCase();
-            emotionBars[i].active = true;
+            debugBarUIs.push(emotionBars[i]);
             addUIElement(emotionBars[i]);
             yOffset += 8;
         } 
     }
+
+    setGameState(GameStates.MAIN_MENU);
 };
 
-var showingFinish = false;
+var setGameState = function(index) {
+    // Exit Code
+    switch(gameState) {
+        case GameStates.MAIN_MENU:
+            break;
+        case GameStates.INTRO:
+            break;
+        case GameStates.JOURNEY:
+            actionsBox.active = false;
+            journeyProgressBar.active = false;
+            moodText.active = false;
+            scoreText.active = false;
+            toggleDebugUI(false);
+            break;
+        case GameStates.JOURNEY_COMPLETE:
+            break;
+        case GameStates.FINAL_SCORE:
+            score = 0;
+            journeysComplete = 0;
+            break;
+    }
+    gameState = index;
+    // Enter Code
+    switch(gameState) {
+        case GameStates.MAIN_MENU:
+            // TODO: Show prompt for this!
+            setGameState(GameStates.INTRO); 
+            break;
+        case GameStates.INTRO:
+            creature = Creature.create(kittyDef); 
+            journeyTick = 0;
+            // TODO: Show prompt for this
+            setGameState(GameStates.JOURNEY);
+            break;
+        case GameStates.JOURNEY:
+            actionsBox.active = true;
+            journeyProgressBar.active = true;
+            moodText.active = true;
+            scoreText.active = true;
+            toggleDebugUI(true);
+            break;
+        case GameStates.JOURNEY_COMPLETE:
+            journeysComplete += 1;
+            let feedback = creature.calculateFeedback();
+            if (creature.health > 0) {
+                score += 1; 
+            }
+            
+            // TODO: Update to use different UI
+            // Who's speaking - it's the owner right? We should probably show this info
+            showMessageBox(feedback, 2, function(){
+                let text;
+                if (creature.health > 0) {
+                    text = "You kept it alive! :D";
+                } else {
+                    text = "You failed to keep it alive. :(";
+                }
+                showMessageBox(text, 2, function(){
+                    if (journeysComplete >= tourLength) {
+                        setGameState(GameStates.FINAL_SCORE);
+                    } else {
+                        // TODO: Show prompt for continuing
+                        setGameState(GameStates.INTRO);
+                    }
+                });
+            });
+            break;
+        case GameStates.FINAL_SCORE:
+            // TODO: Update to use different UI
+            showMessageBox("You kept " + score + " out of " + journeysComplete + " creatures alive.", 5, function() {
+                // TODO: Show prompt for continuing
+                setGameState(GameStates.MAIN_MENU);
+            });
+            break;
+    }
+};
+
 var update = function() {
     updateRoutines();
     
-    if (journeyTick < journeyLength) {
-        journeyTick += 1;
-        if (journeyTick % creatureUpdateInterval === 0) {
-            creature.update();
-        }
-    } else if (!showingFinish) {
-        showingFinish = true;
-        journeysComplete += 1;
-        let feedback = creature.calculateFeedback();
-        if (creature.health > 0) {
-            score += 1; 
-        }
-        // Who's speaking - it's the owner right? We should probably show this
-        showMessageBox(feedback, 2, function(){
-            let text;
-            if (creature.health > 0) {
-                text = "You keep it alive! :D";
-            } else {
-                text = "You failed to keep it alive. :(";
+    if (gameState == GameStates.JOURNEY) {
+        if (journeyTick < journeyLength) {
+            journeyTick += 1;
+            if (journeyTick % creatureUpdateInterval === 0) {
+                creature.update();
             }
-            showMessageBox(text, 2, function(){
-                showingFinish = false;
-                if (journeysComplete >= tourLength) {
-                    // Show how many creatures you kept alive
-                    
-                } else {
-                    // TODO: Show prompt for continuing
-                    journeyTick = 0;
-                    creature = Creature.create(kittyDef);                    
-                }
-            });
-        });
+        } else {
+            setGameState(GameStates.JOURNEY_COMPLETE);
+        }
     }
 
     for (let i = 0, l = uiElements.length; i < l; i++) {
@@ -549,21 +617,15 @@ var update = function() {
 var draw = function() {
 	Hestia.clear(3);
 
-	//drawPalette(0,0,2);
-	creature.draw();
+	if (gameState == GameStates.JOURNEY) {
+    	creature.draw();
+	}
 
 	for (let i = 0, l = uiElements.length; i < l; i++) {
         if (uiElements[i].active) { // differentiate active & visible
             uiElements[i].draw();
         }
     }
-};
-
-var drawPalette = function(x, y, size) {
-	var l = Hestia.palette().length;
-	for(var i = 0; i < l; i++) {
-		Hestia.fillRect(x+i*size,y,size,size,i);
-	}
 };
 
 var config = { 
@@ -605,8 +667,7 @@ window.onload = function() {
 
 // Pay attention to your charge!
 // Only pause on non-focus for debug
-if (debug)
-{
+if (debug) {
     var paused = false;
     window.addEventListener('focus', function(event) {
         if (paused) {
@@ -619,8 +680,6 @@ if (debug)
     });    
 }
 
-
-// Text Box 'class'
 var TextBox = (function(){
 	var proto = {
 		padding: 3,

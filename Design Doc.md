@@ -6,13 +6,15 @@ The creature has needs and a mood.
 You can perform actions to change it's needs and/or moods (but it's unclear what actions will do).
 There is a timer for each trip and you have to manage the creature for that long.
 If certain needs are not met the creature dies, you get money on reaching your destination based on their condition and mood (i.e. your base if they're alive, tip from owner if they're happy).
+Update: No money - the goal is to keep it alive. But you get feedback!
 
 ## Stretch Features:
-More Creatures and Multiple Runs
-Manage your own schedule (You need to sleep / eat, requiring you leave the creature alone).
+More Creature Types and Multiple Runs
+Multiple Creatures at Once
+Manage your own schedule (You *need* to sleep / eat, requiring you leave the creature alone).
 You choose room to place them in, which determines the actions you can take.
 A wiki to consult for the care of your creatures (the timer doesn't stop).
-Owner personality - likely hood to tip, if they care more about needs or mood.
+Owner personality - shapes feedack if they care more about needs or mood.
 Habits - if you play with certain ones too much they become troublesome and the owner won't like it (and it'll cause problems for you too - if you play with them the need to play increases).
 
 ## Basic System Design
@@ -72,4 +74,38 @@ None
 Creature Noises
 UI Sounds
 BGM
+
+### Task List
+x Labels on progress bars
+x Explicit width of text box
+x Auto lines spliter for messages (using text box)
+x Emotion -> Mood mapping
+x Display current mood function (depending on creature may or may not be easily to read)
+x ADD DEATH - I guess maybe a health bar that ticks down? when full need on essential needs
+x Trip progress bar
+x Rewards
+
+o Main Menu Screen
+o Score Screen
+
+x Make interactions pause sim for whilst displaying, but then iterrate sim a specified number of ticks (including checks for and increase of journeyTick)
+
+o TODO - reposition and/or resize numbers (i.e. make positioning match lower case, or size match uppercase so the Kerning doesn't look awful)
+
+o Add Take a Nap function (just skips time) - make it easy to neglect but skips time and gives people a reason - but then they're responsible for this not the systems
+
+o Cheer base line and track back when not in need extremes.
+o balance pass - cheer drops like a stone (if you just play with the kitty as soon as prompted they end up unhappy, that might be fixed by cheer base line), also values are such that they go sleepy for just a moment. 
+	o Moods should have a minimum time, then wear off and re-evalute.
+	o Mood changes should trigger behaviours which are what the player sees
+	(rather than the mood statement)
+
+o A Sprite for the Space Kitty.
+o Some actual UI design
+	Should show name + species, number of deaths, journey progress
+	
+o More Creatures => dead parrot, the blob etc - consider encouraged behaviour with each creature type
+
+o Variable Journey Lengths
+(?) o Inspect option to check health / tiredness
 

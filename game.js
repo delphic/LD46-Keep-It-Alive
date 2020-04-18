@@ -95,44 +95,101 @@ var Creature = (function() {
 var kittyDef = {
     needs: [
         // TODO: Hiearchy of needs - if same category (i.e. band) the higher need gets prio
-        { "id": "play", "growth": 5, "value": 50 },
-        { "id": "food", "growth": 1, "value": 10 }
+        { "id": "play", "growth": 2, "value": 50, "priority": 3 },
+        { "id": "food", "growth": 1, "value": 10, "priority": 5 }
     ],
     emotions: [
         { "id": "cheer", "value": 0 },
-        { "id": "hunger", "value": 10 }
+        { "id": "hunger", "value": 10 },
+        { "id": "playfulness", "value": 10 }
+        // Plafulness and anger?
     ],
     // TODO: Emotion -> mood state mapping
     update: function(creature) {
         // How to turn needs into moods
         if (creature.needs["food"].value > 50) {
             creature.changeEmotion("cheer", -2);
-            creature.changeEmotion("hunger", 5);
+            creature.changeEmotion("hunger", 3);
         }
         if (creature.needs["play"].value > 80) {
-            creature.changeEmotion("cheer",-2);
+            creature.changeEmotion("cheer",-1);
+            creature.changeEmotion("playfulness", +2);
         } else if (creature.needs["play"].value > 50) {
             creature.changeEmotion("cheer", -1);
+            creature.changeEmotion("playfulness", +1);
         }
+        // TODO: should cheer equalise if there's no particular needs?
+        // TODO: If hunger negative increase for lower food values
         // TODO: Die if not fed for long enough - that or growth curve and die at reaching 100
     },
     responses: function(creature, action) {
         let desc = "";
         switch(action.name) {
             case "feed":
-                creature.changeNeed("food", -50);
-                desc = "Space kitty devours the food"; // TODO: dependent on hunger levels
+            {
+                let hunger = creature.emotions["hunger"].value;
+                if (hunger > -10) { // i.e. neutral, quite or very
+                    creature.changeNeed("food", -50);
+                    creature.changeEmotion("hunger", -30);
+                    if (hunger > 30) {
+                        desc = "Space kitty devours the food";
+                    } else if (hunger > 10) {
+                        creature.changeEmotion("cheer", 20);
+                        desc = "Space kitty happily eats the food";
+                    } else {
+                        desc = "Space kitty picks at the food";
+                    }
+                } else {
+                    let playfulness = creature.emotions["playfulness"].value;
+                    if (playfulness > 10) {
+                        desc = "Space kitty stares at you and meows";
+                    } else {
+                        desc = "Space kitty goes to sleep";
+                    }
+                }
                 break;
+            }
             case "play":
-                creature.changeNeed("play", -25);
-                creature.changeEmotion("cheer", 20);
-                desc = "Space kitty is amused"; // TODO: dependent on anger / plafulness
+            {
+                let hunger = creature.emotions["hunger"].value;
+                if (hunger > 30) {
+                    desc = "Space kitty stares at you and meows";
+                } else { 
+                    // TODO: base reaction on mood rather so we get hunger reactions for free
+                    let playfulness = creature.emotions["playfulness"].value; 
+                    if (playfulness > -30) { // i.e. not really, neutral, quite, very
+                        if (playfulness > 30) {
+                            creature.changeNeed("play", -30);
+                            creature.changeEmotion("playfulness", -30);
+                            creature.changeEmotion("cheer", 20);
+                            creature.changeEmotion("hunger", 10);
+                            desc = "Space kitty plays enthusiastically";
+                        } else if (playfulness > 10) {
+                            creature.changeNeed("play", -20);
+                            creature.changeEmotion("playfulness", -30);
+                            creature.changeEmotion("cheer", 15);
+                            desc = "Space kitty plays with you";
+                        } else if (playfulness > -10) {
+                            creature.changeNeed("play", -10);
+                            creature.changeEmotion("playfulness", -30);
+                            creature.changeEmotion("cheer", 5);
+                            desc = "Space kitty plays idly";
+                        } else {
+                            creature.changeNeed("play", -5);
+                            creature.changeEmotion("playfulness", -30);
+                            desc = "Space kitty bats the toy once and lies down";
+                        }
+                    } else {
+                       desc = "Space kitty ignores you";
+                    }
+                }
                 break;
+            }
             default:
                 desc = "Space kitty stares at you";
                 break;
         }
-        return desc;
+        return desc;    // Can we return duration too? Currently issue that play need decreases at less than the growth + duration (this is an arguement for growth curves though)
     },
     draw: function(creature) {
         // Sprite please
@@ -145,9 +202,10 @@ var kittyDef = {
 var interaction = function(index) { // TODO: Context / Options
    currentReaction = creature.interact(actions[index]);
    actionsBox.active = false;
+   let duration = actions[index].duration;
    addRoutine(function(ticks) {
        // show progress bar for action
-       if (ticks > 30 * 3) {
+       if (ticks > 30 * duration) {
            currentReaction = "";
            actionsBox.active = true;
            return true;
@@ -158,14 +216,16 @@ var interaction = function(index) { // TODO: Context / Options
 
 
 var actions = [{
-    name: "feed",
-    description: "Feed",
-    interaction: function() { interaction(0); }
-}, {
     name: "play",
     description: "Play",
-    interaction: function() { interaction(1); }
-}];
+    interaction: function() { interaction(0); },
+    duration: 5
+},{
+    name: "feed",
+    description: "Feed",
+    interaction: function() { interaction(1); },
+    duration: 2
+}]; // Floof?
 
 
 
@@ -226,7 +286,7 @@ var draw = function() {
 
     if (currentReaction) {
         // Show hot key in hestia to show grid lines with labels would be nice
-        // Centered Text could be nice...
+        // TODO: Wrapping text / text box 
         Hestia.drawText(currentReaction, 3, 100, 1);
     }
 

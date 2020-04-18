@@ -1,0 +1,42 @@
+/* Hestia Default Styles */
+html, body {
+	padding: 0;
+	margin: 0;
+	overflow: hidden;
+	background-color: #333;
+}
+canvas {
+	display: block;
+	margin: 0 auto;
+	padding: 0;
+	image-rendering: crisp-edges; /* Firefox */
+	image-rendering: -moz-crisp-edges;
+	image-rendering: optimizespeed;
+	image-rendering: pixelated; /* Chrome */
+	/* Ideally would just use pixelated, but not implemented across browsers */
+	/* https://developer.mozilla.org/en-US/docs/Web/CSS/image-rendering */
+}
+.hideCursor {
+    cursor: none;
+}
+
+/* LD46 Styles */
+html, body {
+    font-family: monospace;
+    background-color: rgb(32,32,32);
+    color: rgb(227,238,192);
+    text-align: center;
+}
+h1 {
+    margin: 32px auto;
+    color: rgb(227,238,192);
+}
+a {
+    color : rgb(94,103,69);
+}
+a:visited {
+    color: rgb(174,486,137);
+}
+a:hover {
+    color: rgb(227,238,192);
+}

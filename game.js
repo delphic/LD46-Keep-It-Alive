@@ -58,7 +58,7 @@ var Creature = (function() {
     
     exports.create = function(def) {
         var creature = Object.create(proto);
-
+        creature.health = def.health;
         creature.def = def;
         creature.needs = {};
         if (def.needs) {
@@ -143,6 +143,7 @@ var Creature = (function() {
 })();
 
 var kittyDef = {
+    health: 100,
     needs: [
         { "id": "play", "growth": 2, "value": 40, "priority": 3 },
         { "id": "food", "growth": 1, "value": 40, "priority": 5 }
@@ -174,8 +175,11 @@ var kittyDef = {
         creature.mood.priority = highestEmotionPriority;
         creature.mood.desc = highestEmotionDesc;
     },
-    // TODO: Emotion -> mood state mapping
     update: function(creature) {
+        if (creature.health == 0) {
+            return;
+        }
+        
         // Turn needs into emotions
         if (creature.needs["food"].value > 50) {
             creature.changeEmotion("cheer", -2);
@@ -189,17 +193,32 @@ var kittyDef = {
             creature.changeEmotion("playfulness", +2);
         }
         
+        // Starvation
+        if (creature.needs["food"].value == 100) {
+            creature.health -= 2;
+            // TODO: Health to influence mood
+            if (creature.health == 0) {
+                creature.mood.emotionId = null;
+                creature.mood.category = 100;
+                creature.mood.priority = 100;
+                creature.mood.desc = "Dead";
+            }
+        } else if (creature.health < 100 && creature.needs["food"].value < 50) {
+            // TODO: Iff rested
+            creature.health += 1;
+        }
+        
+        // TODO: Move to base class
         let moodChanged = false;
         for (let i = 0, l = creature.def.emotions.length; i < l; i++) {
             let emotionDef = creature.def.emotions[i];
             let previousCategory = creature.emotionalCategories[i];
             let category = creature.getEmotionalAttentionNeed(emotionDef.id, emotionDef.invert);
-            if (category != previousCategory) {
+            if (category != previousCategory || creature.mood.category < category) {
                 creature.emotionalCategories[i] = category;
                 if (creature.mood.emotionId === emotionDef.id
                     || creature.mood.category < category
                     || (creature.mood.category === category && creature.mood.priority <= emotionDef.priority)) {
-                    console.log("Space Kitty became " + emotionDef.moods[category]);
                     moodChanged = true;
                     // TODO: Mood should be combos of emotions not highest emotional need
                     creature.mood.emotionId = emotionDef.id;
@@ -209,14 +228,20 @@ var kittyDef = {
                 }
             }
         }
-        // Consider weighting instead of priority (e.g. so that hungery trumps restless)
+        // Consider weighting instead of priority (e.g. so that hungry trumps restless)
         
-        // TODO: should cheer equalise if there's no particular needs?
-        // TODO: If hunger negative increase for lower food values
+        
+        // TODO: should cheer equalise if there's no particular needs (yes - to some base line)
+        // TODO: If hunger negative increase for lower food values (i.e. it should track back to 0)
         // TODO: Reduce health if full food need, Increase (slowly if low food need)
     },
     responses: function(creature, action) {
         let desc = "";
+        
+        if (creature.health == 0) {
+            return "The space kitty is dead";
+        }
+        
         switch(action.name) {
             case "feed":
             {
@@ -282,6 +307,9 @@ var kittyDef = {
                 desc = "Space kitty stares at you";
                 break;
         }
+        
+        // TODO: Recalucluate Mood
+        
         return desc;    // Can we return duration too? Currently issue that play need decreases at less than the growth + duration (this is an arguement for growth curves though)
     },
     draw: function(creature) {
@@ -352,40 +380,49 @@ var init = function() {
     
     // Debug Bars
     if (debug) {
-        let initialOffset = 2;
+        let yOffset = 2;
+        let healthBar = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: function() { return creature.health / 100; } })
+        healthBar.label = "+";
+        healthBar.active = true;
+        addUIElement(healthBar);
+        yOffset += 10;
+        
         let createNeedValueDelegate = function(needId) {
             return function() { return creature.needs[needId].value / 100; };
         };
         let needBars = [];
         for (let i = 0, l = kittyDef.needs.length; i < l; i++) {
             let need = kittyDef.needs[i];
-            needBars[i] = ProgressBar.create({ x: 1, y: initialOffset + i * 8 , width: 64, height: 3, valueDelegate: createNeedValueDelegate(need.id) });
+            needBars[i] = ProgressBar.create({ x: 1, y: yOffset, width: 64, height: 3, valueDelegate: createNeedValueDelegate(need.id) });
             needBars[i].label = need.id[0].toUpperCase();
             needBars[i].active = true;
             addUIElement(needBars[i]);
+            yOffset += 8;
         }
+        yOffset += 2;
+        
         let createEmotionValueDelegate = function(emotionId) {
             return function() { return (creature.emotions[emotionId].value + 50) / 100; };
         };
         let emotionBars = [];
         for (let i = 0, l = kittyDef.emotions.length; i < l; i++) {
             let emotion = kittyDef.emotions[i];
-            emotionBars[i] = ProgressBar.create({ x: 1, y: initialOffset + 2 + (i + needBars.length) * 8 , width: 64, height: 3, valueDelegate: createEmotionValueDelegate(emotion.id) })
+            emotionBars[i] = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: createEmotionValueDelegate(emotion.id) })
             emotionBars[i].label = emotion.id[0].toUpperCase();
             emotionBars[i].active = true;
             addUIElement(emotionBars[i]);
+            yOffset += 8;
         } 
     }
-    
 };
 
 
-var journeyTick = 0, creatureUpdateRate = 30;
+var journeyTick = 0, creatureUpdateInterval = 60;    // Note - setting this lower impacts effect of message duration
 var update = function() {
     updateRoutines();
     
     journeyTick += 1;
-    if (journeyTick % creatureUpdateRate === 0) {
+    if (journeyTick % creatureUpdateInterval === 0) {
         creature.update();
     }
 

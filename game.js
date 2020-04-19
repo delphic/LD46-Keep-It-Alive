@@ -240,12 +240,12 @@ var kittyDef = {
     calculateFeedback: function(creature) { 
         let score = 0;
         let desc = 0;
-        if (creature.health === 100) {
+        if (creature.health === creature.def.health) {
             let happiness = creature.getEmotionalAttentionNeed("cheer"); // Note not inverting
             switch(happiness){
                 case 4:
                 case 3:
-                    desc = creature.name + "seems to have had a great time!"
+                    desc = creature.name + " seems to have had a great time!"
                     break;
                 case 2:
                     desc = "Thanks for taking care of " + creature.name;
@@ -256,12 +256,12 @@ var kittyDef = {
                     desc = creature.name + " seems glad to be off the ship";
                     break;
             }
-        } else if (creature.health > 50) {
+        } else if (creature.health > creature.def.health / 2) {
             desc = creature.name + "doesn't seem to be in the best of health";
         } else if (creature.health > 0) {
             desc = "What have you done to my kitty?";
         } else {
-            desc = "What!? " + creature.health + " is dead. The revival fees are coming out of your pocket!";
+            desc = "What!? " + creature.name + " is dead. The revival fees are coming out of your pocket!";
         }
         return desc;
     },
@@ -315,7 +315,7 @@ var kittyDef = {
                 creature.mood.priority = 100;
                 creature.mood.desc = "Dead";
             }
-        } else if (creature.health < 100 && creature.needs["food"].value < 50) {
+        } else if (creature.health < creature.def.health && creature.needs["food"].value < 50) {
             // TODO: Iff rested
             creature.health += 1;
         }
@@ -534,7 +534,7 @@ var init = function() {
     // Debug Bars
     if (debug && debugBars) {
         let yOffset = 18;
-        let healthBar = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: function() { return creature.health / 100; } })
+        let healthBar = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: function() { return creature.health / creature.def.health; } })
         healthBar.label = "+";
         addUIElement(healthBar);
         debugBarUIs.push(healthBar);

@@ -42,9 +42,14 @@ If we want extreme / readable reactions just set values to max / min. For each c
 Space Cat - reacts pretty much as you'd think, requires play, food, sleep (lots of sleep)
 Space Dog - reacts pretty much as you'd think, requires excerise/play, food, sleep, gets lonely
 Blank Slate - it's needs are determined by your actions
+Ravener - you have to feed it, a lot, but if you don't play with it for a long time it'll hurt you
+when you do
 The blob - it doesn't need anything it just sits there
 Space Corn - you need to set light levels and water it
 Space Orchid - don't water it too much! Give it a day night cycle
+Dead Parrot - it's dead, but you didn't kill it
+Triffid - like space corn but if you try to pet it you have to go to medic
+Tribble - if you feed it, it multiplies
 
 ### Actions
 > Play (+ select toy? laser pointer, squeaky toy, yourself) (e.g. increase happiness, indifferent, bites your arm off (lol actions take longer to perform?))
@@ -94,13 +99,17 @@ o TODO - reposition and/or resize numbers (i.e. make positioning match lower cas
 
 o Add Take a Nap function (just skips time) - make it easy to neglect but skips time and gives people a reason - but then they're responsible for this not the systems
 
-o Cheer base line and track back when not in need extremes.
-o balance pass - cheer drops like a stone (if you just play with the kitty as soon as prompted they end up unhappy, that might be fixed by cheer base line), also values are such that they go sleepy for just a moment. 
-	o Moods should have a minimum time, then wear off and re-evalute.
-	o Mood changes should trigger behaviours which are what the player sees
-	(rather than the mood statement)
+o (!Dangerous) Cheer / emotion base line and track back when not in need extremes.
+	Will upset existing balance which is more or less working for kitty, however this *should* be there
 
-o A Sprite for the Space Kitty.
+o Moods should have a minimum time, then wear off and re-evalute.
+o Change Mood descriptions to behaviour for that mood descriptions
+
+x balance pass - cheer drops like a stone (if you just play with the kitty as soon as prompted they end up unhappy, that might be fixed by cheer base line), also values are such that they go sleepy for just a moment. 
+
+o Sprite(s) for the Space Kitty.
+	So *need* an idle/indifferent pose, would also like "wants to play", "needs something", "miserable/unwell", "sleepy"
+
 o Some actual UI design
 	Should show name + species, number of deaths, journey progress
 	

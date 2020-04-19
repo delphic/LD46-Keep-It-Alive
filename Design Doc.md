@@ -83,34 +83,57 @@ BGM
 
 ### Task List
 x Labels on progress bars
+
 x Explicit width of text box
+
 x Auto lines spliter for messages (using text box)
+
 x Emotion -> Mood mapping
+
 x Display current mood function (depending on creature may or may not be easily to read)
+
 x ADD DEATH - I guess maybe a health bar that ticks down? when full need on essential needs
+
 x Trip progress bar
+
 x Rewards
+
 x Make interactions pause sim for whilst displaying, but then iterrate sim a specified number of ticks (including checks for and increase of journeyTick)
+
 - Change Mood descriptions to behaviour for that mood descriptions (using sprites instead)
+
 x balance pass - cheer drops like a stone (if you just play with the kitty as soon as prompted they end up unhappy, that might be fixed by cheer base line), also values are such that they go sleepy for just a moment. 
+
 x Sprite(s) for the Space Kitty (64x64) + mini for intro (32x32)
+
 	So *need* an idle/indifferent pose, would also like "wants to play", "needs something", "miserable/unwell", "sleepy"
+	
 	x Update sleep with zZz
+	
 	x Icon for journey and death (fix into char size)
+	
 x Moods should have a minimum time, then wear off and re-evalute.
+
 x Add Take a Nap function (just skips time) - make it easy to neglect but skips time and gives people a reason - but then they're responsible for this not the systems
 
 x Minimum Height to show message
 
 ### Mocks
 x Some actual UI design
+
 	Main Menu, Intro, Journey Report, Tour Report
+	
 	Main Screen: Should show name + species, number of deaths, journey progress
+	
 X Main Menu Screen
+
 x Intro Screen (needs to communicate you're part of a haulage firm)
+
 x Journey Report Screen
+
 x Tour Report Screen
-o Star field on main menu
+
+x Star field on main menu
 
 o Pretty boxes (double borders?) - mock please
 
@@ -121,9 +144,11 @@ o TODO - reposition and/or resize numbers (i.e. make positioning match lower cas
 o (!Dangerous) Cheer / emotion base line and track back when not in need extremes.
 	Will upset existing balance which is more or less working for kitty, however this *should* be there
 
-o More Creatures => dead parrot, the blob etc - consider encouraged behaviour with each creature type
+x More Creatures => dead parrot, the blob etc - consider encouraged behaviour with each creature type
 	o Starting creatures on different need levels and health levels
 	o Difficult creatures, which may refuse to eat even when they need to
+
+o Improve Text for Kassa 
 
 o Probably too much for this Jam, but in retrospect would have been good to have a day/night cycle to help guide timings and add some variation to need growth rates / rhythm to looking after things (and some creatures could be noctornal) - also dangerous for them to be very hungry when night comes (also you could config gremlins).
 

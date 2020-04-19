@@ -97,6 +97,8 @@ x Sprite(s) for the Space Kitty (64x64) + mini for intro (32x32)
 	So *need* an idle/indifferent pose, would also like "wants to play", "needs something", "miserable/unwell", "sleepy"
 	x Update sleep with zZz
 	x Icon for journey and death (fix into char size)
+x Moods should have a minimum time, then wear off and re-evalute.
+x Add Take a Nap function (just skips time) - make it easy to neglect but skips time and gives people a reason - but then they're responsible for this not the systems
 
 ### Mocks
 o Some actual UI design
@@ -106,15 +108,13 @@ X Main Menu Screen
 o Intro Screen (needs to communicate you're part of a haulage firm)
 o Journey Report Screen
 o Tour Report Screen
+o Star field on main menu
 
 o Pretty boxes (double borders?) - mock please
 
-x Moods should have a minimum time, then wear off and re-evalute.
-o Tour Count on main screen
+o Succesful Tour Count on main screen (you get a commendation if you complete with 0 deaths)
 
 o TODO - reposition and/or resize numbers (i.e. make positioning match lower case, or size match uppercase so the Kerning doesn't look awful)
-
-o Add Take a Nap function (just skips time) - make it easy to neglect but skips time and gives people a reason - but then they're responsible for this not the systems
 
 o (!Dangerous) Cheer / emotion base line and track back when not in need extremes.
 	Will upset existing balance which is more or less working for kitty, however this *should* be there

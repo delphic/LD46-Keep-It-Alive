@@ -105,6 +105,10 @@ o Some actual UI design
 	Should show name + species, number of deaths, journey progress
 	
 o More Creatures => dead parrot, the blob etc - consider encouraged behaviour with each creature type
+	o Starting creatures on different need levels and health levels
+	o Difficult creatures, which may refuse to eat even when they need to
+
+o Probably too much for this Jam, but in retrospect would have been good to have a day/night cycle to help guide timings and add some variation to need growth rates / rhythm to looking after things (and some creatures could be noctornal) - also dangerous for them to be very hungry when night comes (also you could config gremlins).
 
 o Variable Journey Lengths
 (?) o Inspect option to check health / tiredness

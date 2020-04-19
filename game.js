@@ -109,6 +109,7 @@ var createDebugUI = function() {
 
 var toggleDebugUI = function(value) {
     if (debugUIs.length === 0) {
+        // TODO: Should recreate for each creature as needs vary
         createDebugUI();
     }
     
@@ -441,7 +442,7 @@ var kittyDef = {
         let desc = "";
         let duration = interactionMessageShowTime * config.tickRate;
         let recalculateMoodAfterDuration = false;
-        if (creature.health == 0) {
+        if (creature.health <= 0) {
             return {
                 duration: duration,
                 desc: "The space kitty is dead"
@@ -687,7 +688,7 @@ var blobDef = {
     responses: function(creature, action) {
         let duration = interactionMessageShowTime * config.tickRate;
         let recalculateMoodAfterDuration = false;
-        if (action.name != "nap" && creature.health == 0) {
+        if (action.name != "nap" && creature.health <= 0) {
             return {
                 duration: duration,
                 desc: "It's rock solid"
@@ -867,7 +868,7 @@ var kassaDef = {
     responses: function(creature, action) {
         let duration = interactionMessageShowTime * config.tickRate;
         let recalculateMoodAfterDuration = false;
-        if (action.name != "nap" && creature.health == 0) {
+        if (action.name != "nap" && creature.health <= 0) {
             return {
                 duration: duration,
                 desc: creature.name + " doesn't respond"
@@ -899,7 +900,7 @@ var kassaDef = {
             }
             case "nap":
             {
-                duration = 480 + Math.floor(Math.random() * 360);
+                duration = 360 + Math.floor(Math.random() * 240);
                 desc = getNapDesc();
                 recalculateMoodAfterDuration = true;
                 break;
@@ -957,6 +958,10 @@ var createRandomCreature = function() {
 
 // TODO: Move actions + interaction to class / protype
 var interaction = function(index) { // TODO: Context / Options
+    if (journeyTick >= journeyLength) {
+        // No interactions if journey is complete
+        return;
+    }
     let interactionResult = creature.interact(actions[index]);
     actionsBox.active = false;
     simPaused = true;

@@ -71,6 +71,7 @@ Font
 Supporting Icons where possible
 Sprite per mood
 Lighting capable (i.e. use a palette of 8, even though we have four colours, allowing for shading based on light conditions). 
+Sprite for actions (e.g. kitty > need eating - can reuse play)
 
 ### Required Audio
 None
@@ -115,7 +116,7 @@ x Sprite(s) for the Space Kitty (64x64) + mini for intro (32x32)
 o Some actual UI design
 	Main Menu, Intro, Journey Report, Tour Report
 	Main Screen: Should show name + species, number of deaths, journey progress
-	
+
 o More Creatures => dead parrot, the blob etc - consider encouraged behaviour with each creature type
 	o Starting creatures on different need levels and health levels
 	o Difficult creatures, which may refuse to eat even when they need to

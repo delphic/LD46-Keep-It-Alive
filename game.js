@@ -797,6 +797,7 @@ var setGameState = function(index) {
     switch(gameState) {
         case GameStates.MAIN_MENU:
             generateStarField();
+            tourLength = 2 + Math.floor(Math.random() * 4); // Between 2 and 5
             break;
         case GameStates.INTRO:
             confirmingReceipt = false;
@@ -922,7 +923,7 @@ var draw = function() {
     	
     	// Commendations
     	Hestia.drawSpriteSection(6, config.width / 2 - 5, 102, 32, 16, 8, 8, 3);
-    	Hestia.drawText("" + comendations, config.width / 2 + 5, 100, 2);
+    	Hestia.drawText("" + comendations, config.width / 2 + 5, 101, 2);
     	
     	// Continue Prompt
     	let tw = Hestia.measureText("Press Z to Start");

@@ -787,7 +787,7 @@ var setGameState = function(index) {
             break;
         case GameStates.INTRO:
             confirmingReceipt = false;
-            journeyLength = (120 + Math.floor(Math.random() * 120)) * config.tickRate;
+            journeyLength = (120 + Math.floor(Math.random() * 24) * 5) * config.tickRate;
             creature = Creature.create(kittyDef); 
             journeyTick = 0;
             break;
@@ -912,6 +912,7 @@ var draw = function() {
     	let x = Math.floor((config.width / 2) - ((tw + 8 + offset) / 2));
     	Hestia.drawText("Press Z to Start", x, 116, 2);
     	Hestia.drawSpriteSection(6, x + tw + offset, 116, 32, 8, 8, 8, 3);
+    	
     } else if (gameState == GameStates.INTRO 
         || gameState == GameStates.JOURNEY_COMPLETE
         || gameState == GameStates.FINAL_SCORE) {
@@ -937,22 +938,26 @@ var draw = function() {
             y += 8;
             Hestia.drawText(".............", 40 - 1, y + 2, 2);
             Hestia.drawText(creature.def.desc, 40, y, 1);
-            
-            y += 16;
+
+            y += 16
             Hestia.drawText("Creature Name:", 40, y, 0);
             y += 8;
             Hestia.drawText(".............", 40 - 1 , y + 2, 2);
             Hestia.drawText(creature.name, 40, y, 1);
             
             y += 16;
-            Hestia.drawText("Journey Length:", 40, y, 0);
-            y += 8;
-            Hestia.drawText(".............", 40 - 1, y + 2, 2);
-            Hestia.drawText("" + journeyLength / config.tickRate, 40, y, 1);
-
-            // TODO: Tour Duration
+            creature.draw(40, y, true);
             
-            y += 32;
+            Hestia.drawText("T", 80, y, 0); // TODO: Clock icon
+            Hestia.drawText(".....", 80-1+10, y+2, 2);
+            Hestia.drawText("" + journeyLength / config.tickRate, 80 + 16, y, 1);
+            
+            y += 16;
+            Hestia.drawSpriteSection(6, 80, y, 32, 8, 8, 8, 3);
+            Hestia.drawText(".....", 80-1+10, y+2, 2);
+            Hestia.drawText("" + journeysComplete + "/" + tourLength, 80 + 16, y, 1);
+            
+            y += 24;
         } else if (gameState == GameStates.FINAL_SCORE) {
             let deaths = journeysComplete - score;
             Hestia.drawText("Form 42z13-b", 40, 18, 2);
@@ -1023,8 +1028,13 @@ var draw = function() {
             if (feedbackLines.length > 3) {
                 Hestia.drawText(feedbackLines[3], 40, y, 1); 
             }
+            y += 8;
+            Hestia.drawText(".............", 40 - 1 , y + 2, 2);
+            if (feedbackLines.length > 4) {
+                Hestia.drawText(feedbackLines[4], 40, y, 1); 
+            }
 
-            y += 32;
+            y += 24;
         }
         Hestia.drawText("Confirm Reciept:", 40, y, 0);
         y += 8;

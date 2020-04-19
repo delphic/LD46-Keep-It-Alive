@@ -636,8 +636,6 @@ var actions = [{
 }]; // Contextual Actions?
 
 var init = function() {
-
-    
     // Journey UI Init
     actionsBox = TextBox.create({ 
         x: 3,
@@ -665,17 +663,18 @@ var init = function() {
     // so not adding to journeyUIs which are auto toggled
     
     let journeyProgressBar = ProgressBar.create({
-        x: 1, y: 1, width: config.width - 4, height: 3,
+        x: 2 + 10, y: 1, width: config.width - 6 - 10, height: 4,
         valueDelegate: function() {
             return journeyTick / journeyLength;
         }
+        // TODO: Suppose icon labels
     });
     addUIElement(journeyProgressBar);
     journeyUIs.push(journeyProgressBar);
 
     let creatureName = {
         x: config.width - 1,
-        y: 7,
+        y: 8,
         color: 1,
         text: "",
         dead: false,
@@ -735,13 +734,15 @@ var init = function() {
     
     let toursText = {
         x: 2,
-        y: 7,
+        y: 8,
         color: 0,
         text: "",
         update: function() {
             this.text = "" + (journeysComplete) + "/" + tourLength;
         },
         draw: function() {
+            // HACK: Label for journey bar
+            Hestia.drawSpriteSection(6, this.x, this.y - 8, 32, 24, 8, 8, 3);
             Hestia.drawSpriteSection(6, this.x, this.y, 32, 8, 8, 8, 3);
             Hestia.drawText(this.text, this.x + 10, this.y, this.color);
         }
@@ -926,7 +927,7 @@ var draw = function() {
     	Hestia.fillRect(config.width - 26, 0, 1, config.height, 1);
     	Hestia.fillRect(26, config.height-1, config.width - 2*26, 1, 1);
 
-        // TODO: Haulage Inc Logo
+        // Haulage Inc Logo
         Hestia.drawSpriteSection(9, 34, 5, 14, 32, 50, 12, 3);
         Hestia.drawSpriteSection(10, 83, 5, 0, 32, 50, 12, 3);
 
@@ -948,7 +949,7 @@ var draw = function() {
             y += 16;
             creature.draw(40, y, true);
             
-            Hestia.drawText("T", 80, y, 0); // TODO: Clock icon
+            Hestia.drawSpriteSection(6, 80, y, 32, 24, 8, 8, 3);
             Hestia.drawText(".....", 80-1+10, y+2, 2);
             Hestia.drawText("" + journeyLength / config.tickRate, 80 + 16, y, 1);
             

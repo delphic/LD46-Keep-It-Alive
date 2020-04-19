@@ -18,8 +18,6 @@ var config = {
 	"spriteSheet": { 
 		"path": "images/spritesheet.png", 
 		"spriteSize": 64
-		// Kitty 0 -> 6, 8x8 skull 6 (offset 32,0), 8x8 ship 6 offset 32,8
-		// Title 7,8,9,10
 	},
 	"keys": [ 37, 39, 38, 40, 90, 88], // left, right, up, down, z, x
 	"hideCursor": false
@@ -886,7 +884,7 @@ var kassaDef = {
             }
             case "nap":
             {
-                duration = 360 + Math.floor(Math.random() * 240);
+                duration = 480 + Math.floor(Math.random() * 360);
                 desc = "You doze off";
                 recalculateMoodAfterDuration = true;
                 break;
@@ -926,15 +924,13 @@ var kassaDef = {
     }
 };
 
-
 var createRandomCreature = function() {
-    let type = Math.floor(Math.random() * 2);
+    let type = Math.floor(Math.random() * 3);
     let result;
     if (type == 0) {
         result = Creature.create(blobDef);
     } else if (type == 1) {
         result = Creature.create(kassaDef);
-        // TODO: Randomise name
     } else {
         result = Creature.create(kittyDef);
     }

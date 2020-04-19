@@ -84,8 +84,8 @@ var createDebugUI = function() {
             return function() { return creature.needs[needId].value / 100; };
         };
         let needBars = [];
-        for (let i = 0, l = kittyDef.needs.length; i < l; i++) {
-            let need = kittyDef.needs[i];
+        for (let i = 0, l = creature.def.needs.length; i < l; i++) {
+            let need = creature.def.needs[i];
             needBars[i] = ProgressBar.create({ x: 1, y: yOffset, width: 64, height: 3, valueDelegate: createNeedValueDelegate(need.id) });
             needBars[i].label = need.id[0].toUpperCase();
             addUIElement(needBars[i]);
@@ -98,8 +98,8 @@ var createDebugUI = function() {
             return function() { return (creature.emotions[emotionId].value + 50) / 100; };
         };
         let emotionBars = [];
-        for (let i = 0, l = kittyDef.emotions.length; i < l; i++) {
-            let emotion = kittyDef.emotions[i];
+        for (let i = 0, l = creature.def.emotions.length; i < l; i++) {
+            let emotion = creature.def.emotions[i];
             emotionBars[i] = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: createEmotionValueDelegate(emotion.id) })
             emotionBars[i].label = emotion.id[0].toUpperCase();
             debugUIs.push(emotionBars[i]);
@@ -572,6 +572,226 @@ var kittyDef = {
     }
 };
 
+var blobDef = {
+    names: [ "Jelly", "Blob", "Pulper", "Zogoo" ],
+    desc: "Unknown",
+    health: 100,
+    moodTime: 4,
+    needs: [
+        { "id": "play", "growth": 2, "value": 40, "priority": 3 },
+        { "id": "food", "growth": 2, "value": 40, "priority": 5 }
+    ],
+    emotions: [
+        { "id": "cheer", "value": 0, "priority": 2, "invert": true, "moods": [ "Happy", "Content", "Indifferent", "Unhappy", "Miserable" ], "overridePriority": 6 },
+        { "id": "hunger", "value": 10, "priority": 5, "moods": [ "Stated", "Sleepy", "Indifferent", "Hungry", "Ravenous"] },
+        { "id": "playfulness", "value": 10, "priority": 4, "moods": [ "Unhappy", "Sleepy", "Indifferent", "Playful", "Restless"] }
+    ],
+    calculateFeedback: function(creature) { 
+        let score = 0;
+        let desc = 0;
+        if (creature.health === creature.def.health) {
+            let descs = [ "wibbling", "wobbling", "jiggling" ];
+            desc = "Still " + descs[Math.floor(Math.random() * descs.length)];
+        } else if (creature.health > 0) {
+            desc = "Why is " + creature.name + " flashing shapes constantly now?"
+        } else {
+            desc = "Oh no, " + creature.name  + "solidified";
+        }
+        return desc;
+    },
+    init: function(creature) {
+        let highestEmotionId, highestEmotionCategory = -1,  highestEmotionPriority = -1, highestEmotionDesc;
+        creature.emotionalCategories = [];
+        for (let i = 0, l = creature.def.emotions.length; i < l; i++) {
+            let emotionDef = creature.def.emotions[i];
+            let category = creature.getEmotionalAttentionNeed(emotionDef.id, emotionDef.invert);
+            let priority = emotionDef.priority;
+            creature.emotionalCategories.push(category);
+            if (category > highestEmotionCategory 
+                || (category == highestEmotionCategory && highestEmotionPriority < priority)) {
+                highestEmotionId = emotionDef.id;
+                highestEmotionCategory = category;
+                highestEmotionPriority = priority;
+                highestEmotionDesc = emotionDef.moods[category];
+            }
+        }
+        creature.mood.emotionId = highestEmotionId;
+        creature.mood.category = highestEmotionCategory;
+        creature.mood.priority = highestEmotionPriority;
+        creature.mood.desc = highestEmotionDesc;
+    },
+    update: function(creature) {
+        if (creature.health == 0) {
+            return;
+        }
+        
+        // Turn needs into emotions
+        if (creature.needs["food"].value > 50) {
+            creature.changeEmotion("hunger", 3);
+        }
+        if (creature.needs["play"].value > 80) {
+            creature.changeEmotion("playfulness", +2);
+        } else if (creature.needs["play"].value > 60) {
+            creature.changeEmotion("playfulness", +1);
+        } else if (creature.needs["play"].value < 40) {
+            creature.changeEmotion("playfulness", -2);
+        }
+        
+        // Emotions
+        if ((creature.needs["play"] > 20 || creature.needs["play"] < 80) 
+            && (creature.needs["food"] < 80)) {
+            // Track back to 0
+            creature.changeEmotion("cheer", -1 * Math.sign(craeture.emotion["cheer"]));
+        }
+
+        // Starvation
+        if (creature.needs["food"].value == 100) {
+            creature.health -= 2;
+            if (creature.health == 0) {
+                creature.mood.emotionId = null;
+                creature.mood.category = 100;
+                creature.mood.priority = 100;
+                creature.mood.desc = "Dead";
+                creature.mood.time = 0;
+            }
+        }
+        // Oversimulation
+        if (creature.needs["play"].value < 20) {
+            creature.health -= 1;
+            if (creature.health == 0) {
+                creature.mood.emotionId = null;
+                creature.mood.category = 100;
+                creature.mood.priority = 100;
+                creature.mood.desc = "Dead";
+                creature.mood.time = 0;
+            }
+        }
+        // Health regeneration
+        if (creature.health < creature.def.health && creature.needs["food"].value < 50 && creature.needs["play"] > 20) {
+            creature.health += 1;
+        }
+        
+        if (!simPaused) {
+            // It's more important for time in mood to be visually accurate than sim accurate
+            // So only increase if sim is running naturally (rather than being sped up)
+            creature.mood.time += creatureUpdateInterval / config.tickRate;
+        }
+        if (creature.mood.time > creature.def.moodTime) {
+            creature.recalculateMood();
+        }
+        
+    },
+    responses: function(creature, action) {
+        let duration = interactionMessageShowTime * config.tickRate;
+        let recalculateMoodAfterDuration = false;
+        if (action.name != "nap" && creature.health == 0) {
+            return {
+                duration: duration,
+                desc: "It's rock solid"
+            }
+        }
+        
+        let result = {};
+        let descs = [ "wibbles", "wobbles", "jiggles" ];
+        let desc = creature.name + " " + descs[Math.floor(Math.random() * descs.length)];
+
+        switch(action.name) {
+            case "feed":
+            {
+                duration = 60;
+                {
+                    let hunger = creature.emotions["hunger"].value;
+                    if (hunger > -10) { // i.e. neutral, quite or very
+                        creature.changeNeed("food", -50);
+                        creature.changeEmotion("hunger", -50);
+                    }
+                }
+                break;
+            }
+            case "play":
+            {
+                duration = 60;
+                { 
+                    let playfulness = creature.emotions["playfulness"].value; 
+                    creature.changeNeed("play", -30);
+                    creature.changeEmotion("playfulness", -30);
+                    if (playfulness > 0) {
+                        creature.changeEmotion("cheer", 100);
+                    } else {
+                        creature.changeEmotion("cheer", -100);
+                    }
+                }
+                break;
+            }
+            case "nap":
+            {
+                duration = 360 + Math.floor(Math.random() * 240);
+                desc = "You doze off";
+                recalculateMoodAfterDuration = true;
+                break;
+            }
+            default:
+                duration = 30;
+                break;
+        }
+
+        return { desc: desc, duration: duration, recalculateMoodAfterDuration: recalculateMoodAfterDuration };
+    },
+    draw: function(creature, x, y, isThumbnail) {
+        // Blob is 14 to 19 + 6 offset 32, 32
+        // idle - 14, colorChange - 15, ring - 16, spots - 17, rings - 18, dead - 19, thumbnail - 6
+        if (isThumbnail) {
+            Hestia.drawSpriteSection(6, x, y, 32, 32, 32, 32, 3);
+        } else {
+            let index;
+            // TODO: Randomise mappings
+            switch(creature.mood.desc) {
+                case "Happy":
+                case "Content":
+                case "Indifferent":
+                case "Stated":
+                default:
+                    index = 14;
+                    break;
+                case "Restless":
+                case "Playful":
+                    index = 17;
+                    break;
+                case "Hungry":
+                case "Ravenous":
+                    index = 16;
+                    break;
+                case "Unhappy":
+                case "Miserable":
+                    index = 15;
+                    break;
+                case "Sleepy":
+                case "Asleep":
+                    index = 18;
+                    break;
+                case "Dead":
+                    index = 19;
+                    break;
+            }
+            Hestia.drawSprite(index, x, y, 3);
+        }
+    }
+};
+
+var createRandomCreature = function() {
+    let type = Math.floor(Math.random() * 2);
+    let result;
+    if (type == 0) {
+        result = Creature.create(blobDef);
+    } else {
+        result = Creature.create(kittyDef);
+    }
+
+    // TODO: Randomise Starting Needs
+
+    return result;
+};
+
 // TODO: Move actions + interaction to class / protype
 var interaction = function(index) { // TODO: Context / Options
     let interactionResult = creature.interact(actions[index]);
@@ -810,7 +1030,7 @@ var setGameState = function(index) {
         case GameStates.INTRO:
             confirmingReceipt = false;
             journeyLength = (120 + Math.floor(Math.random() * 24) * 5) * config.tickRate;
-            creature = Creature.create(kittyDef); 
+            creature = createRandomCreature();  
             journeyTick = 0;
             break;
         case GameStates.JOURNEY:

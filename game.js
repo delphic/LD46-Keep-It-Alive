@@ -645,6 +645,14 @@ var generateStarField = function() {
     starFieldTick = 0;
 };
 
+var drawStarField = function() {
+    starFieldTick++;
+	let twinkleIndex = Math.floor(starFieldTick / config.tickRate);
+	for (let i = 0, l = starFieldPoints.length; i < l; i++) {
+	    Hestia.setPixel(starFieldPoints[i][0], starFieldPoints[i][1], ((i + twinkleIndex) % 5) ? 2 : 3);
+	}
+};
+
 var init = function() {
     // Journey UI Init
     actionsBox = TextBox.create({ 
@@ -893,11 +901,7 @@ var draw = function() {
     	Hestia.clear(0);
     	
     	// Draw Starfield
-    	starFieldTick++;
-    	let twinkleIndex = Math.floor(starFieldTick / config.tickRate);
-    	for (let i = 0, l = starFieldPoints.length; i < l; i++) {
-    	    Hestia.setPixel(starFieldPoints[i][0], starFieldPoints[i][1], ((i + twinkleIndex) % 5) ? 2 : 3);
-    	}
+    	drawStarField();
 
     	// Top Bar
     	Hestia.fillRect(0, 6, config.width, 1, 3);
@@ -935,7 +939,9 @@ var draw = function() {
     } else if (gameState == GameStates.INTRO 
         || gameState == GameStates.JOURNEY_COMPLETE
         || gameState == GameStates.FINAL_SCORE) {
-    	Hestia.clear(0);   
+
+    	Hestia.clear(0);
+    	drawStarField();
     	
     	// BG
     	Hestia.fillRect(26, 0, config.width - 2*26, config.height, 3);

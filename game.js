@@ -36,9 +36,10 @@ var GameStates = {
     FINAL_SCORE: 4
 };
 var gameState = -1; 
+var comendations = 0;
 
-// MENU State
-var mainMenuBox;
+// Form States
+var confirmingReceipt, feedback;
 
 // TOUR State
 var score = 0, journeysComplete = 0, tourLength = 3;
@@ -360,7 +361,7 @@ var kittyDef = {
         } else if (creature.health > 0) {
             desc = "What have you done to my kitty?";
         } else {
-            desc = "What!? " + creature.name + " is dead. The revival fees are coming out of your pocket!";
+            desc = "What!? You're paying the revival fees!";
         }
         return desc;
     },
@@ -635,24 +636,7 @@ var actions = [{
 }]; // Contextual Actions?
 
 var init = function() {
-    // Menu UI init
-    mainMenuBox = TextBox.create({
-        x: (config.width/2) - 35,
-        y: 112,
-        lines: [ "New Tour" ],
-        color: 1,
-        bgColor: 3,
-        select: true,
-        width: 70,
-        padding: 6,
-        indent: 9,
-        align: 1,
-        drawSelect: function(x, y) {
-            Hestia.drawSpriteSection(6, x, y-4, 32, 8, 8, 8, 3);
-        },
-        actions: [ function(){ scheduleGameStateChange(GameStates.INTRO); } ]
-    });
-    addUIElement(mainMenuBox);
+
     
     // Journey UI Init
     actionsBox = TextBox.create({ 
@@ -696,9 +680,7 @@ var init = function() {
         text: "",
         dead: false,
         update: function() {
-            if (!this.text) {
-                this.text = creature.name;
-            }
+            this.text = creature.name;
         },
         draw: function() {
             if (this.text) {
@@ -718,11 +700,10 @@ var init = function() {
         text: "",
         dead: false,
         update: function() {
-            if (!this.text || (creature.health > 0 && this.dead)) {
-                this.text = creature.def.desc;
-            } else if (creature.health === 0 && !this.dead) {
-                this.dead = true;
+            if (creature.health === 0) {
                 this.text = "Dead " + creature.def.desc;
+            } else {
+                this.text = creature.def.desc;
             }
         },
         draw: function() {
@@ -786,7 +767,6 @@ var setGameState = function(index) {
     // Exit Code
     switch(gameState) {
         case GameStates.MAIN_MENU:
-            mainMenuBox.active = false;
             break;
         case GameStates.INTRO:
             break;
@@ -804,50 +784,30 @@ var setGameState = function(index) {
     // Enter Code
     switch(gameState) {
         case GameStates.MAIN_MENU:
-            mainMenuBox.active = true;
             break;
         case GameStates.INTRO:
+            confirmingReceipt = false;
+            journeyLength = (120 + Math.floor(Math.random() * 120)) * config.tickRate;
             creature = Creature.create(kittyDef); 
             journeyTick = 0;
-            // TODO: Show prompt for this
-            scheduleGameStateChange(GameStates.JOURNEY);
             break;
         case GameStates.JOURNEY:
             simPaused = false;
             toggleJourneyUIs(true);
             break;
         case GameStates.JOURNEY_COMPLETE:
+            confirmingReceipt = false;
             journeysComplete += 1;
-            let feedback = creature.calculateFeedback();
+            feedback = creature.calculateFeedback();
             if (creature.health > 0) {
                 score += 1; 
             }
-            
-            // TODO: Update to use different UI
-            // Who's speaking - it's the owner right? We should probably show this info
-            showMessageBox(feedback, 2, function(){
-                let text;
-                if (creature.health > 0) {
-                    text = "You kept it alive!";
-                } else {
-                    text = "You failed to keep it alive.";
-                }
-                showMessageBox(text, 2, function(){
-                        // TODO: Show prompt for continuing
-                    if (journeysComplete >= tourLength) {
-                        scheduleGameStateChange(GameStates.FINAL_SCORE);
-                    } else {
-                        scheduleGameStateChange(GameStates.INTRO);
-                    }
-                });
-            });
             break;
         case GameStates.FINAL_SCORE:
-            // TODO: Update to use different UI
-            showMessageBox("You kept " + score + " out of " + journeysComplete + " creatures alive.", 5, function() {
-                // TODO: Show prompt for continuing
-                scheduleGameStateChange(GameStates.MAIN_MENU);
-            });
+            if (journeysComplete - score <= 0) {
+                comendations += 1;
+            }
+            confirmingReceipt = false;
             break;
     }
 };
@@ -874,7 +834,38 @@ var update = function() {
                 runSimStep(1);
             }         
         }
-    }
+        if (debug && Hestia.buttonUp(5)) {
+            journeyTick = journeyLength;
+        }
+    } else if (gameState == GameStates.INTRO
+        || gameState == GameStates.FINAL_SCORE
+        || gameState == GameStates.JOURNEY_COMPLETE) {
+
+        let targetState = GameStates.MAIN_MENU;
+        if (gameState == GameStates.INTRO) {
+            targetState = GameStates.JOURNEY;
+        } else if (gameState == GameStates.JOURNEY_COMPLETE) {
+            if (journeysComplete >= tourLength) {
+                targetState = GameStates.FINAL_SCORE;
+            } else {
+                targetState = GameStates.INTRO;
+            }
+        }
+        
+        if (!confirmingReceipt && Hestia.buttonUp(4)) {
+            confirmingReceipt = true;
+            addRoutine(function(ticks) {
+                if (ticks > 1 * config.tickRate) {
+                    scheduleGameStateChange(targetState);
+                    return true;
+                }
+            });
+        }
+    } else if (gameState == GameStates.MAIN_MENU) {
+        if (Hestia.buttonUp(4)) {
+            scheduleGameStateChange(GameStates.INTRO);
+        }
+    } 
 
     for (let i = 0, l = uiElements.length; i < l; i++) {
         if (uiElements[i].active) {
@@ -884,6 +875,7 @@ var update = function() {
 };
 
 var draw = function() {
+    
     if (gameState == GameStates.MAIN_MENU) {
     	Hestia.clear(0);
     	// TODO: Draw star field
@@ -909,13 +901,147 @@ var draw = function() {
     	// Border
     	Hestia.fillRect(0, 9, 1, 86, 1);
     	Hestia.fillRect(config.width-1, 9, 1, 86, 1);
+    	
+    	// Commendations
+    	Hestia.drawSpriteSection(6, config.width / 2 - 5, 102, 32, 16, 8, 8, 3);
+    	Hestia.drawText("" + comendations, config.width / 2 + 5, 100, 2);
+    	
+    	// Continue Prompt
+    	let tw = Hestia.measureText("Press Z to Start");
+    	let offset = 4;
+    	let x = Math.floor((config.width / 2) - ((tw + 8 + offset) / 2));
+    	Hestia.drawText("Press Z to Start", x, 116, 2);
+    	Hestia.drawSpriteSection(6, x + tw + offset, 116, 32, 8, 8, 8, 3);
+    } else if (gameState == GameStates.INTRO 
+        || gameState == GameStates.JOURNEY_COMPLETE
+        || gameState == GameStates.FINAL_SCORE) {
+    	Hestia.clear(0);   
+    	
+    	// BG
+    	Hestia.fillRect(26, 0, config.width - 2*26, config.height, 3);
+    	// Border
+    	Hestia.fillRect(26, 0, config.width - 2*26, 1, 2);
+    	Hestia.fillRect(26, 0, 1, config.height, 2);
+    	Hestia.fillRect(config.width - 26, 0, 1, config.height, 1);
+    	Hestia.fillRect(26, config.height-1, config.width - 2*26, 1, 1);
+
+        // TODO: Haulage Inc Logo
+        Hestia.drawSpriteSection(9, 34, 5, 14, 32, 50, 12, 3);
+        Hestia.drawSpriteSection(10, 83, 5, 0, 32, 50, 12, 3);
+
+        let y = 32; 
+        if (gameState == GameStates.INTRO) {
+            Hestia.drawText("Form 38s27-e", 40, 18, 2);
+               
+            Hestia.drawText("Creature Type:", 40, y, 0);
+            y += 8;
+            Hestia.drawText(".............", 40 - 1, y + 2, 2);
+            Hestia.drawText(creature.def.desc, 40, y, 1);
+            
+            y += 16;
+            Hestia.drawText("Creature Name:", 40, y, 0);
+            y += 8;
+            Hestia.drawText(".............", 40 - 1 , y + 2, 2);
+            Hestia.drawText(creature.name, 40, y, 1);
+            
+            y += 16;
+            Hestia.drawText("Journey Length:", 40, y, 0);
+            y += 8;
+            Hestia.drawText(".............", 40 - 1, y + 2, 2);
+            Hestia.drawText("" + journeyLength / config.tickRate, 40, y, 1);
+
+            // TODO: Tour Duration
+            
+            y += 32;
+        } else if (gameState == GameStates.FINAL_SCORE) {
+            let deaths = journeysComplete - score;
+            Hestia.drawText("Form 42z13-b", 40, 18, 2);
+   
+            Hestia.drawText("Journeys:", 40, y, 0);
+            y += 8;
+            Hestia.drawText(".............", 40 - 1, y + 2, 2);
+            Hestia.drawText("" + journeysComplete, 40, y, 1); 
+            
+            y += 16;
+            Hestia.drawText("Deaths:", 40, y, 0);
+            y += 8;
+            Hestia.drawText(".............", 40 - 1 , y + 2, 2);
+            Hestia.drawText("" + deaths, 40, y, 1);
+            
+            
+            y += 16;
+            Hestia.drawText("Commendation:", 40, y, 0);
+            y += 8;
+            Hestia.drawText(".............", 40 - 1, y + 2, 2);
+            if (deaths <= 0) {
+                Hestia.drawText("Earned", 40, y, 1);
+            } else {
+                Hestia.drawText("Not Earned", 40, y, 1);
+            }
+            
+            y += 16;
+            if (deaths <= 0) {
+                // Draw Commendation
+                Hestia.drawSpriteSection(6, 40, y, 32, 16, 8, 8, 3);
+            } else {
+                // Draw Skulls
+                for (let i = 0; i < deaths; i++) {
+                    Hestia.drawSpriteSection(6, 40 + i * 10, y, 32, 0, 8, 8, 3);
+                }
+            }
+
+            y += 16;
+        } else if (gameState == GameStates.JOURNEY_COMPLETE) {
+            let death = creature.health <= 0;
+            Hestia.drawText("Form 93q03-k", 40, 18, 2);
+   
+            Hestia.drawText("Cargo Status:", 40, y, 0);
+            y += 8;
+            Hestia.drawText(".............", 40 - 1, y + 2, 2);
+            Hestia.drawText(death ? "Deceased" : "Alive" , 40, y, 1); 
+            
+            let feedbackLines = TextBox.calculateLines(feedback, 80);
+            y += 16;
+            Hestia.drawText("Feedback:", 40, y, 0);
+            y += 8;
+            Hestia.drawText(".............", 40 - 1 , y + 2, 2);
+            if (feedbackLines.length > 0) {
+                Hestia.drawText(feedbackLines[0], 40, y, 1); 
+            }
+            y += 8;
+            Hestia.drawText(".............", 40 - 1 , y + 2, 2);
+            if (feedbackLines.length > 1) {
+                Hestia.drawText(feedbackLines[1], 40, y, 1); 
+            }
+            y += 8;
+            Hestia.drawText(".............", 40 - 1 , y + 2, 2);
+            if (feedbackLines.length > 2) {
+                Hestia.drawText(feedbackLines[2], 40, y, 1); 
+            }
+            y += 8;
+            Hestia.drawText(".............", 40 - 1 , y + 2, 2);
+            if (feedbackLines.length > 3) {
+                Hestia.drawText(feedbackLines[3], 40, y, 1); 
+            }
+
+            y += 32;
+        }
+        Hestia.drawText("Confirm Reciept:", 40, y, 0);
+        y += 8;
+        Hestia.drawText(".............", 40 - 1, y + 2, 2);
+        if (confirmingReceipt) {
+            Hestia.drawText("Accepted", 40, y, 1);
+        } else if (Hestia.button(4)) {
+            Hestia.drawText("Accepted", 40, y, 2);
+        }
+    } else if (gameState == GameStates.JOURNEY) {
+        Hestia.clear(3);
+    	// TODO: Draw portholes? with moving stars? (mock plz)
+    	creature.draw(config.width/2 - 32, config.height/2 - 32);
     } else {
-    	Hestia.clear(3);
-    	if (gameState == GameStates.JOURNEY) {
-    	    // TODO: Draw portholes? with moving stars? (mock plz)
-    	    creature.draw(config.width/2 - 32, config.height/2 - 32);
-    	}
-    } 
+        Hestia.clear(3);
+        
+    }
 
 	for (let i = 0, l = uiElements.length; i < l; i++) {
         if (uiElements[i].active) { // differentiate active & visible

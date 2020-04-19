@@ -25,7 +25,7 @@ var config = {
 	"hideCursor": false
 };
 
-var debug = true, debugBars = false;
+var debug = false, debugBars = false;
 
 var GameStates = {
     BOOT: -1,

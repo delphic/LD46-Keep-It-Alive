@@ -62,6 +62,11 @@ var toggleDebugUI = function(value) {
 var toggleJourneyUIs = function(value) {
     for (let i = 0, l = journeyUIs.length; i < l; i++) {
         journeyUIs[i].active = value;
+        // HACK: actions box index is setting itself
+        // to 1 but I've no idea why
+        if (journeyUIs[i].index !== undefined) {
+            journeyUIs[i].index = 0;
+        }
     }
     toggleDebugUI(value);
 };
@@ -545,11 +550,11 @@ var init = function() {
     actionsBox = TextBox.create({ 
         x: 3,
         y: config.height - 24,
-        lines: [actions[0].desc, actions[1].desc],
+        lines: [ actions[0].desc, actions[1].desc],
         color: 0,
         bgColor: 3,
         select: true,
-        actions: [actions[0].interaction, actions[1].interaction],
+        actions: [ actions[0].interaction, actions[1].interaction],
         width: config.width - 6
     });
     addUIElement(actionsBox);
@@ -749,7 +754,7 @@ var setGameState = function(index) {
         case GameStates.INTRO:
             creature = Creature.create(kittyDef); 
             journeyTick = 0;
-            // TODO: Show prompt for this and schedule (also check it's)
+            // TODO: Show prompt for this
             scheduleGameStateChange(GameStates.JOURNEY);
             break;
         case GameStates.JOURNEY:

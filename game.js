@@ -647,7 +647,7 @@ var blobDef = {
         // Starvation
         if (creature.needs["food"].value == 100) {
             creature.health -= 2;
-            if (creature.health == 0) {
+            if (creature.health <= 0) {
                 creature.mood.emotionId = null;
                 creature.mood.category = 100;
                 creature.mood.priority = 100;
@@ -658,7 +658,7 @@ var blobDef = {
         // Oversimulation
         if (creature.needs["play"].value < 20) {
             creature.health -= 1;
-            if (creature.health == 0) {
+            if (creature.health <= 0) {
                 creature.mood.emotionId = null;
                 creature.mood.category = 100;
                 creature.mood.priority = 100;
@@ -778,11 +778,163 @@ var blobDef = {
     }
 };
 
+var kassaDef = {
+    names: [ "xm-329", "72-zr-5", "kf-12", "7_xr_7", "5_hf_5", "lr+17" ],
+    desc: "Kassa",
+    health: 100,
+    moodTime: 0,
+    needs: [
+        { "id": "food", "growth": 1.5, "value": 50, "priority": 5 }
+    ],
+    emotions: [
+        { "id": "hunger", "value": 10, "priority": 5, "moods": [ "Overfed", "Overfed", "Healthy", "Healthy", "Underfed"] },
+    ],
+    calculateFeedback: function(creature) { 
+        let score = 0;
+        let desc = "";
+        if (creature.health > 80) {
+            desc = creature.name + " is looking quite hale"
+        } else if (creature.health > 0) {
+            desc = creature.name + " is a bit limp";
+        } else {
+            let descs = [ "We're never using xeno haul again", "You can't even take care of Kassa!?", "What am I supposed to feed the children?" ];
+            desc = descs[Math.floor(Math.random() * descs.length)];
+        }
+        return desc;
+    },
+    init: function(creature) {
+        let highestEmotionId, highestEmotionCategory = -1,  highestEmotionPriority = -1, highestEmotionDesc;
+        creature.emotionalCategories = [];
+        for (let i = 0, l = creature.def.emotions.length; i < l; i++) {
+            let emotionDef = creature.def.emotions[i];
+            let category = creature.getEmotionalAttentionNeed(emotionDef.id, emotionDef.invert);
+            let priority = emotionDef.priority;
+            creature.emotionalCategories.push(category);
+            if (category > highestEmotionCategory 
+                || (category == highestEmotionCategory && highestEmotionPriority < priority)) {
+                highestEmotionId = emotionDef.id;
+                highestEmotionCategory = category;
+                highestEmotionPriority = priority;
+                highestEmotionDesc = emotionDef.moods[category];
+            }
+        }
+        creature.mood.emotionId = highestEmotionId;
+        creature.mood.category = highestEmotionCategory;
+        creature.mood.priority = highestEmotionPriority;
+        creature.mood.desc = highestEmotionDesc;
+    },
+    update: function(creature) {
+        if (creature.health <= 0) {
+            return;
+        }
+        // No actual emotions for kassa
+        if (creature.health < 80) {
+            creature.emotions["hunger"].value = creature.needs["food"].value - 50;
+        } else {
+            creature.emotions["hunger"].value = 0;
+        }
+
+        // Over or underfeeding
+        if (creature.needs["food"].value > 80 || creature.needs["food"].value < 40) {
+            creature.health -= 3;
+            if (creature.health <= 0) {
+                creature.mood.emotionId = null;
+                creature.mood.category = 100;
+                creature.mood.priority = 100;
+                creature.mood.desc = "Dead";
+                creature.mood.time = 0;
+            }
+        } else if (creature.health < creature.def.health) {
+            creature.health += 0.5;
+        }
+        
+        if (!simPaused) {
+            // It's more important for time in mood to be visually accurate than sim accurate
+            // So only increase if sim is running naturally (rather than being sped up)
+            creature.mood.time += creatureUpdateInterval / config.tickRate;
+        }
+        if (creature.mood.time > creature.def.moodTime) {
+            creature.recalculateMood();
+        }
+        
+    },
+    responses: function(creature, action) {
+        let duration = interactionMessageShowTime * config.tickRate;
+        let recalculateMoodAfterDuration = false;
+        if (action.name != "nap" && creature.health == 0) {
+            return {
+                duration: duration,
+                desc: creature.name + " doesn't respond"
+            }
+        }
+        
+        let result = {};
+        let descs = [ " sways", " makes beeping noises", ];
+        let desc = creature.name + " " + descs[Math.floor(Math.random() * descs.length)];
+
+        switch(action.name) {
+            case "feed":
+            {
+                duration = 60;
+                creature.changeNeed("food", -40);
+                break;
+            }
+            case "play":
+            {
+                duration = 60;
+                break;
+            }
+            case "nap":
+            {
+                duration = 360 + Math.floor(Math.random() * 240);
+                desc = "You doze off";
+                recalculateMoodAfterDuration = true;
+                break;
+            }
+            default:
+                duration = 30;
+                break;
+        }
+
+        return { desc: desc, duration: duration, recalculateMoodAfterDuration: recalculateMoodAfterDuration };
+    },
+    draw: function(creature, x, y, isThumbnail) {
+        // Blob is 11, 12, 13, 20 + 6 (offset 0, 32)
+        // healthy - 11, underfed - 12, overfed - 13, dead - 20, thumbnail - 6
+        if (isThumbnail) {
+            Hestia.drawSpriteSection(6, x, y, 0, 32, 32, 32, 3);
+        } else {
+            let index;
+            // TODO: Randomise mappings
+            switch(creature.mood.desc) {
+                case "Healthy":
+                default:
+                    index = 11;
+                    break;
+                case "Underfed":
+                    index = 12;
+                    break;
+                case "Overfed":
+                    index = 13;
+                    break;
+                case "Dead":
+                    index = 20;
+                    break;
+            }
+            Hestia.drawSprite(index, x, y, 3);
+        }
+    }
+};
+
+
 var createRandomCreature = function() {
     let type = Math.floor(Math.random() * 2);
     let result;
     if (type == 0) {
         result = Creature.create(blobDef);
+    } else if (type == 1) {
+        result = Creature.create(kassaDef);
+        // TODO: Randomise name
     } else {
         result = Creature.create(kittyDef);
     }

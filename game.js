@@ -15,10 +15,10 @@ var config = {
 	    "reducedWidthLowerCase": 1,
 	    "baselineOffsets": "gjpqy"
 	},
-	/*"spriteSheet": { 
-		"path": "", 
-		"spriteSize": 32
-	},*/
+	"spriteSheet": { 
+		"path": "images/creatures.png", 
+		"spriteSize": 64
+	},
 	"keys": [ 37, 39, 38, 40, 90, 88], // left, right, up, down, z, x
 	"hideCursor": false
 };
@@ -35,21 +35,30 @@ var GameStates = {
 };
 var gameState = -1; 
 
+// TOUR State
+var score = 0, journeysComplete = 0, tourLength = 3;
+
 // JOURNEY State 
-var actionsBox, currentReactionBox, journeyProgressBar, moodText, scoreText;
-var debugBarUIs = [];
+var actionsBox, currentReactionBox;
+var debugUIs = [], journeyUIs = [];
 var journeyTick = 0, journeyLength = config.tickRate * 120;
 var interactionMessageShowTime = 3;
-var score = 0, journeysComplete = 0, tourLength = 3;
 var creature, creatureUpdateInterval = config.tickRate;
 var pauseSim;
 
 var toggleDebugUI = function(value) {
     if (debug && debugBars) {
-        for (let i = 0, l = debugBarUIs.length; i < l; i++) {
-            debugBarUIs[i].active = value;
+        for (let i = 0, l = debugUIs.length; i < l; i++) {
+            debugUIs[i].active = value;
         }
     }
+};
+
+var toggleJourneyUIs = function(value) {
+    for (let i = 0, l = journeyUIs.length; i < l; i++) {
+        journeyUIs[i].active = value;
+    }
+    toggleDebugUI(value);
 };
 
 // These should probably be in their own module
@@ -212,8 +221,8 @@ var Creature = (function() {
             return moodChanged;
         };
         
-        creature.draw = function() {
-            def.draw(creature);
+        creature.draw = function(x, y, isThumbnail) {
+            def.draw(creature, x, y, isThumbnail);
         };
         
         def.init(creature);
@@ -225,6 +234,7 @@ var Creature = (function() {
 
 var kittyDef = {
     names: [ "Floofmiester", "Prof. Jiggly", "Fuzzy Boots", "Beans" ],
+    desc: "Space Kitty",
     health: 100,
     needs: [
         { "id": "play", "growth": 2, "value": 40, "priority": 3 },
@@ -415,10 +425,43 @@ var kittyDef = {
 
         return { desc: desc, duration: duration };
     },
-    draw: function(creature) {
-        // Sprite please
-        Hestia.fillRect((160/2) - 16, (144/2) - 16, 32, 32, 1);
-        // TODO: Display primary mood
+    draw: function(creature, x, y, isThumbnail) {
+        // Kitty is 0 to 6
+        // idle - 0, playful - 1, demanding - 2, unhappy - 3, asleep - 4, dead - 5, thumbnail - 6
+        if (isThumbnail) {
+            Hestia.drawSprite(6, x, y, 32, 32, 3);
+        } else {
+            let index;
+            switch(creature.mood.desc) {
+                case "Happy":
+                case "Content":
+                case "Indifferent":
+                case "Stated":
+                default:
+                    index = 0;
+                    break;
+                case "Playful":
+                    index = 1;
+                    break;
+                case "Restless":
+                case "Hungry":  // Maybe Hungry should be 0
+                case "Ravenous":
+                    index = 2;
+                    break;
+                case "Unhappy":
+                case "Miserable":
+                    index = 3;
+                    break;
+                case "Sleepy":
+                case "Asleep":
+                    index = 4;
+                    break;
+                case "Dead":
+                    index = 5;
+                    break;
+            }
+            Hestia.drawSprite(index, x, y, 64, 64, 3);
+        }
     }
 };
 
@@ -481,6 +524,7 @@ var init = function() {
         width: config.width - 6
     });
     addUIElement(actionsBox);
+    journeyUIs.push(actionsBox);
     
     currentReactionBox = TextBox.create({
         x: 3,
@@ -490,22 +534,28 @@ var init = function() {
         width: config.width - 6
     });
     addUIElement(currentReactionBox);
+    // visibility controlled by separate logic, also currently reused
+    // so not adding to journeyUIs which are auto toggled
     
-    journeyProgressBar = ProgressBar.create({
+    let journeyProgressBar = ProgressBar.create({
         x: 1, y: 1, width: config.width - 4, height: 3,
         valueDelegate: function() {
             return journeyTick / journeyLength;
         }
     });
     addUIElement(journeyProgressBar);
-    
-    moodText = {
+    journeyUIs.push(journeyProgressBar);
+
+    let creatureName = {
         x: config.width - 1,
         y: 7,
         color: 1,
         text: "",
+        dead: false,
         update: function() {
-            this.text = creature.mood.desc;
+            if (!this.text) {
+                this.text = creature.name;
+            }
         },
         draw: function() {
             if (this.text) {
@@ -515,12 +565,38 @@ var init = function() {
             }
         }
     };
-    addUIElement(moodText);
-    
-    scoreText = {
+    addUIElement(creatureName);
+    journeyUIs.push(creatureName);
+
+    let creatureDesc = {
+        x: config.width - 1,
+        y: 16,
+        color: 2,
+        text: "",
+        dead: false,
+        update: function() {
+            if (!this.text || (creature.health > 0 && this.dead)) {
+                this.text = creature.def.desc;
+            } else if (creature.health === 0 && !this.dead) {
+                this.dead = true;
+                this.text = "Dead " + creature.def.desc;
+            }
+        },
+        draw: function() {
+            if (this.text) {
+                // right aligned
+                let width = Hestia.measureText(this.text);
+                Hestia.drawText(this.text, this.x - width , this.y, this.color);
+            }
+        }
+    };
+    addUIElement(creatureDesc);
+    journeyUIs.push(creatureDesc);
+
+    let scoreText = {
         x: 2,
-        y: 7,
-        color: 0,
+        y: 16,
+        color: 1,
         text: "",
         update: function() {
             this.text = "" + (journeysComplete - score) + "deaths";
@@ -530,14 +606,49 @@ var init = function() {
         }
     };
     addUIElement(scoreText);
+    journeyUIs.push(scoreText);
+    
+    let toursText = {
+        x: 2,
+        y: 7,
+        color: 0,
+        text: "",
+        update: function() {
+            this.text = "" + (journeysComplete) + "/" + tourLength;
+        },
+        draw: function() {
+            Hestia.drawText(this.text, this.x, this.y, this.color);
+        }
+    };
+    addUIElement(toursText);
+    journeyUIs.push(toursText);
 
     // Debug Bars
     if (debug && debugBars) {
+        let moodText = {
+            x: config.width - 1,
+            y: 24,
+            color: 2,
+            text: "",
+            update: function() {
+                this.text = creature.mood.desc;
+            },
+            draw: function() {
+                if (this.text) {
+                    // right aligned
+                    let width = Hestia.measureText(this.text);
+                    Hestia.drawText(this.text, this.x - width , this.y, this.color);
+                }
+            }
+        };
+        debugUIs.push(moodText);
+        addUIElement(moodText);
+        
         let yOffset = 18;
         let healthBar = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: function() { return creature.health / creature.def.health; } })
         healthBar.label = "+";
         addUIElement(healthBar);
-        debugBarUIs.push(healthBar);
+        debugUIs.push(healthBar);
         yOffset += 10;
         
         let createNeedValueDelegate = function(needId) {
@@ -549,7 +660,7 @@ var init = function() {
             needBars[i] = ProgressBar.create({ x: 1, y: yOffset, width: 64, height: 3, valueDelegate: createNeedValueDelegate(need.id) });
             needBars[i].label = need.id[0].toUpperCase();
             addUIElement(needBars[i]);
-            debugBarUIs.push(needBars[i]);
+            debugUIs.push(needBars[i]);
             yOffset += 8;
         }
         yOffset += 2;
@@ -562,7 +673,7 @@ var init = function() {
             let emotion = kittyDef.emotions[i];
             emotionBars[i] = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: createEmotionValueDelegate(emotion.id) })
             emotionBars[i].label = emotion.id[0].toUpperCase();
-            debugBarUIs.push(emotionBars[i]);
+            debugUIs.push(emotionBars[i]);
             addUIElement(emotionBars[i]);
             yOffset += 8;
         } 
@@ -579,11 +690,7 @@ var setGameState = function(index) {
         case GameStates.INTRO:
             break;
         case GameStates.JOURNEY:
-            actionsBox.active = false;
-            journeyProgressBar.active = false;
-            moodText.active = false;
-            scoreText.active = false;
-            toggleDebugUI(false);
+            toggleJourneyUIs(false);
             break;
         case GameStates.JOURNEY_COMPLETE:
             break;
@@ -606,11 +713,7 @@ var setGameState = function(index) {
             setGameState(GameStates.JOURNEY);
             break;
         case GameStates.JOURNEY:
-            actionsBox.active = true;
-            journeyProgressBar.active = true;
-            moodText.active = true;
-            scoreText.active = true;
-            toggleDebugUI(true);
+            toggleJourneyUIs(true);
             break;
         case GameStates.JOURNEY_COMPLETE:
             journeysComplete += 1;
@@ -683,7 +786,7 @@ var draw = function() {
 	Hestia.clear(3);
 
 	if (gameState == GameStates.JOURNEY) {
-    	creature.draw();
+    	creature.draw(config.width/2 - 32, config.height/2 - 32);
 	}
 
 	for (let i = 0, l = uiElements.length; i < l; i++) {

@@ -167,6 +167,11 @@ var clearRoutines = function() {
     routineStars.lenght = 0;
 };
 
+var getNapDesc = function() {
+    let descs = [ "You doze off", "You take a well earned nap", "Everything is under control, nap time!" ];
+    return  descs[Math.floor(Math.random() * descs.length)];
+};
+
 var Creature = (function() {
     var exports = {};
     var proto = {
@@ -518,7 +523,7 @@ var kittyDef = {
             case "nap":
             {
                 duration = 360 + Math.floor(Math.random() * 240);
-                desc = "You doze off";
+                desc = getNapDesc();
                 recalculateMoodAfterDuration = true;
                 break;
             }
@@ -588,10 +593,10 @@ var blobDef = {
         let score = 0;
         let desc = 0;
         if (creature.health === creature.def.health) {
-            let descs = [ "wibbling", "wobbling", "jiggling" ];
+            let descs = [ "wibbling", "wobbling", "jiggling", " missing you" ];
             desc = "Still " + descs[Math.floor(Math.random() * descs.length)];
         } else if (creature.health > 0) {
-            desc = "Why is " + creature.name + " flashing shapes constantly now?"
+            desc = "Why is " + creature.name + " flashing shapes at me?";
         } else {
             desc = "Oh no, " + creature.name  + "solidified";
         }
@@ -724,7 +729,7 @@ var blobDef = {
             case "nap":
             {
                 duration = 360 + Math.floor(Math.random() * 240);
-                desc = "You doze off";
+                desc = getNapDesc();
                 recalculateMoodAfterDuration = true;
                 break;
             }
@@ -791,9 +796,12 @@ var kassaDef = {
         let score = 0;
         let desc = "";
         if (creature.health > 80) {
-            desc = creature.name + " is looking quite hale"
+            let descs = [ creature.name + " is looking quite hale",  creature.name + "wanted to say goodby", "This kassa is delicious!" ];
+            desc = descs[Math.floor(Math.random() * descs.length)]; ;
+            
         } else if (creature.health > 0) {
-            desc = creature.name + " is a bit limp";
+            let descs = [ creature.name + " is a bit limp",  "why is " + creature.name + " so dry", "They're making so much noise, what did you do?" ];
+            desc = descs[Math.floor(Math.random() * descs.length)];
         } else {
             let descs = [ "We're never using xeno haul again", "You can't even take care of Kassa!?", "What am I supposed to feed the children?" ];
             desc = descs[Math.floor(Math.random() * descs.length)];
@@ -867,8 +875,15 @@ var kassaDef = {
         }
         
         let result = {};
-        let descs = [ " sways", " makes beeping noises", ];
-        let desc = creature.name + " " + descs[Math.floor(Math.random() * descs.length)];
+        let desc = "";
+        
+        if (creature.health > 80) {
+            let descs = [ " sways gently", " makes beeping noises", " chirps happily", " waves it's antenni" ];
+            desc = creature.name + " " + descs[Math.floor(Math.random() * descs.length)];
+        } else {
+            let descs = [ " chitters angrily", "'s central stalk points at you", " lets out a high pitched noise" ];
+            desc = creature.name + " " + descs[Math.floor(Math.random() * descs.length)];
+        }
 
         switch(action.name) {
             case "feed":
@@ -885,7 +900,7 @@ var kassaDef = {
             case "nap":
             {
                 duration = 480 + Math.floor(Math.random() * 360);
-                desc = "You doze off";
+                desc = getNapDesc();
                 recalculateMoodAfterDuration = true;
                 break;
             }

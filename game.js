@@ -656,7 +656,8 @@ var init = function() {
         y: config.height - 24,
         color: 0,
         bgColor: 3,
-        width: config.width - 6
+        width: config.width - 6,
+        height: 22
     });
     addUIElement(currentReactionBox);
     // visibility controlled by separate logic, also currently reused
@@ -1190,7 +1191,7 @@ var TextBox = (function(){
 		},
 		recalculateDimensions: function() {
 			this.w = this.width ? this.width : this.calculateMinWidth();
-			this.h = this.calculateMinHeight();
+			this.h = this.height ? this.height : this.calculateMinHeight();
 		},
 		calculateMinWidth: function() {
 		    // TODO: Update for grid (check each column against grid column width)
@@ -1242,6 +1243,7 @@ var TextBox = (function(){
 		textBox.actions = params.actions;
 		textBox.cancelAction = params.cancelAction;
 		textBox.width = params.width;
+		textBox.height = params.height;
 		if (params.align !== undefined) {
 		    textBox.align = params.align;
 		}

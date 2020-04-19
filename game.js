@@ -39,7 +39,7 @@ var gameState = -1;
 var comendations = 0;
 
 // Form States
-var confirmingReceipt, feedback;
+var confirmingReceipt, feedback, starFieldPoints, starFieldTick;
 
 // TOUR State
 var score = 0, journeysComplete = 0, tourLength = 3;
@@ -635,6 +635,16 @@ var actions = [{
     interaction: function() { interaction(2); }
 }]; // Contextual Actions?
 
+var generateStarField = function() {
+    starFieldPoints = [];
+    for (let i = 0; i < 100; i++) {
+        let x = 1 + Math.floor(Math.random() * (config.width - 2));
+        let y = 1 + Math.floor(Math.random() * (config.height - 2));
+        starFieldPoints.push([x, y]);
+    }
+    starFieldTick = 0;
+};
+
 var init = function() {
     // Journey UI Init
     actionsBox = TextBox.create({ 
@@ -786,6 +796,7 @@ var setGameState = function(index) {
     // Enter Code
     switch(gameState) {
         case GameStates.MAIN_MENU:
+            generateStarField();
             break;
         case GameStates.INTRO:
             confirmingReceipt = false;
@@ -877,10 +888,15 @@ var update = function() {
 };
 
 var draw = function() {
-    
     if (gameState == GameStates.MAIN_MENU) {
     	Hestia.clear(0);
-    	// TODO: Draw star field
+    	
+    	// Draw Starfield
+    	starFieldTick++;
+    	let twinkleIndex = Math.floor(starFieldTick / config.tickRate);
+    	for (let i = 0, l = starFieldPoints.length; i < l; i++) {
+    	    Hestia.setPixel(starFieldPoints[i][0], starFieldPoints[i][1], ((i + twinkleIndex) % 5) ? 2 : 3);
+    	}
 
     	// Top Bar
     	Hestia.fillRect(0, 6, config.width, 1, 3);

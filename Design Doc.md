@@ -100,7 +100,7 @@ x Sprite(s) for the Space Kitty (64x64) + mini for intro (32x32)
 x Moods should have a minimum time, then wear off and re-evalute.
 x Add Take a Nap function (just skips time) - make it easy to neglect but skips time and gives people a reason - but then they're responsible for this not the systems
 
-o Minimum Height to show message
+x Minimum Height to show message
 
 ### Mocks
 x Some actual UI design

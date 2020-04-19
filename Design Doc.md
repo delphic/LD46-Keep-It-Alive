@@ -110,13 +110,13 @@ x balance pass - cheer drops like a stone (if you just play with the kitty as so
 
 x Sprite(s) for the Space Kitty (64x64) + mini for intro (32x32)
 	So *need* an idle/indifferent pose, would also like "wants to play", "needs something", "miserable/unwell", "sleepy"
-	o Update sleep with zZz
-	o Icon for journey and death (fix into char size)
+	x Update sleep with zZz
+	x Icon for journey and death (fix into char size)
 
 o Some actual UI design
 	Main Menu, Intro, Journey Report, Tour Report
 	Main Screen: Should show name + species, number of deaths, journey progress
-
+q
 o More Creatures => dead parrot, the blob etc - consider encouraged behaviour with each creature type
 	o Starting creatures on different need levels and health levels
 	o Difficult creatures, which may refuse to eat even when they need to

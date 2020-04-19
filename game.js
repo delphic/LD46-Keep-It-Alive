@@ -16,8 +16,10 @@ var config = {
 	    "baselineOffsets": "gjpqy"
 	},
 	"spriteSheet": { 
-		"path": "images/creatures.png", 
+		"path": "images/spritesheet.png", 
 		"spriteSize": 64
+		// Kitty 0 -> 6, 8x8 skull 6 (offset 32,0), 8x8 ship 6 offset 32,8
+		// Title 7,8,9,10
 	},
 	"keys": [ 37, 39, 38, 40, 90, 88], // left, right, up, down, z, x
 	"hideCursor": false
@@ -34,6 +36,9 @@ var GameStates = {
     FINAL_SCORE: 4
 };
 var gameState = -1; 
+
+// MENU State
+var mainMenuBox;
 
 // TOUR State
 var score = 0, journeysComplete = 0, tourLength = 3;
@@ -89,9 +94,12 @@ var updateRoutines = function() {
     }
 };
 var resetRoutines = function() {
-    routines = [];
-    routineStarts = [];
     routineTick = 0;
+};
+var clearRoutines = function() {
+    routineTick = 0;
+    routines.length = 0;
+    routineStars.lenght = 0;
 };
 
 var Creature = (function() {
@@ -199,6 +207,7 @@ var Creature = (function() {
         };
         creature.recalculateMood = function() {
             let moodChanged = false;
+
             for (let i = 0, l = creature.def.emotions.length; i < l; i++) {
                 let emotionDef = creature.def.emotions[i];
                 let previousCategory = creature.emotionalCategories[i];
@@ -242,7 +251,7 @@ var kittyDef = {
         // TODO: Rest Need
     ],
     emotions: [
-        { "id": "cheer", "value": 0, "priority": 3, "invert": true, "moods": [ "Happy", "Content", "Indifferent", "Unhappy", "Miserable" ] },
+        { "id": "cheer", "value": 0, "priority": 2, "invert": true, "moods": [ "Happy", "Content", "Indifferent", "Unhappy", "Miserable" ] },
         { "id": "hunger", "value": 10, "priority": 5, "moods": [ "Stated", "Sleepy", "Indifferent", "Hungry", "Ravenous"] },
         { "id": "playfulness", "value": 10, "priority": 4, "moods": [ "Asleep", "Sleepy", "Indifferent", "Playful", "Restless"] }
         // anger?
@@ -429,7 +438,7 @@ var kittyDef = {
         // Kitty is 0 to 6
         // idle - 0, playful - 1, demanding - 2, unhappy - 3, asleep - 4, dead - 5, thumbnail - 6
         if (isThumbnail) {
-            Hestia.drawSprite(6, x, y, 32, 32, 3);
+            Hestia.drawSpriteSection(6, x, y, 0, 0, 32, 32, 3);
         } else {
             let index;
             switch(creature.mood.desc) {
@@ -460,7 +469,7 @@ var kittyDef = {
                     index = 5;
                     break;
             }
-            Hestia.drawSprite(index, x, y, 64, 64, 3);
+            Hestia.drawSprite(index, x, y, 3);
         }
     }
 };
@@ -512,6 +521,26 @@ var actions = [{
 }]; // Contextual Actions?
 
 var init = function() {
+    // Menu UI init
+    mainMenuBox = TextBox.create({
+        x: (config.width/2) - 25,
+        y: 107,
+        lines: [ "Start" ],
+        color: 1,
+        bgColor: 3,
+        select: true,
+        width: 50,
+        padding: 6,
+        indent: 9,
+        align: 1,
+        drawSelect: function(x, y) {
+            // TODO: Offset from aim point
+            Hestia.drawSpriteSection(6, x, y-4, 32, 8, 8, 8, 3);
+        },
+        actions: [ function(){ scheduleGameStateChange(GameStates.INTRO); } ]
+    });
+    addUIElement(mainMenuBox);
+    
     // Journey UI Init
     actionsBox = TextBox.create({ 
         x: 3,
@@ -682,10 +711,22 @@ var init = function() {
     setGameState(GameStates.MAIN_MENU);
 };
 
+var scheduleGameStateChange = function (index) {
+    addRoutine(function(ticks) {
+        if (ticks > 0) {
+            setGameState(index);
+            return true;
+        }
+        return false;
+    });
+};
+
 var setGameState = function(index) {
+    resetRoutines();
     // Exit Code
     switch(gameState) {
         case GameStates.MAIN_MENU:
+            mainMenuBox.active = false;
             break;
         case GameStates.INTRO:
             break;
@@ -703,14 +744,13 @@ var setGameState = function(index) {
     // Enter Code
     switch(gameState) {
         case GameStates.MAIN_MENU:
-            // TODO: Show prompt for this!
-            setGameState(GameStates.INTRO); 
+            mainMenuBox.active = true;
             break;
         case GameStates.INTRO:
             creature = Creature.create(kittyDef); 
             journeyTick = 0;
-            // TODO: Show prompt for this
-            setGameState(GameStates.JOURNEY);
+            // TODO: Show prompt for this and schedule (also check it's)
+            scheduleGameStateChange(GameStates.JOURNEY);
             break;
         case GameStates.JOURNEY:
             toggleJourneyUIs(true);
@@ -732,11 +772,11 @@ var setGameState = function(index) {
                     text = "You failed to keep it alive. :(";
                 }
                 showMessageBox(text, 2, function(){
-                    if (journeysComplete >= tourLength) {
-                        setGameState(GameStates.FINAL_SCORE);
-                    } else {
                         // TODO: Show prompt for continuing
-                        setGameState(GameStates.INTRO);
+                    if (journeysComplete >= tourLength) {
+                        scheduleGameStateChange(GameStates.FINAL_SCORE);
+                    } else {
+                        scheduleGameStateChange(GameStates.INTRO);
                     }
                 });
             });
@@ -745,7 +785,7 @@ var setGameState = function(index) {
             // TODO: Update to use different UI
             showMessageBox("You kept " + score + " out of " + journeysComplete + " creatures alive.", 5, function() {
                 // TODO: Show prompt for continuing
-                setGameState(GameStates.MAIN_MENU);
+                scheduleGameStateChange(GameStates.MAIN_MENU);
             });
             break;
     }
@@ -768,7 +808,7 @@ var update = function() {
     if (gameState == GameStates.JOURNEY) {
         if (!pauseSim) {
             if (journeyTick >= journeyLength) {
-                setGameState(GameStates.JOURNEY_COMPLETE);
+                scheduleGameStateChange(GameStates.JOURNEY_COMPLETE);
             } else {
                 runSimStep(1);
             }         
@@ -783,11 +823,38 @@ var update = function() {
 };
 
 var draw = function() {
-	Hestia.clear(3);
+    if (gameState == GameStates.MAIN_MENU) {
+    	Hestia.clear(0);
+    	// TODO: Draw star field
 
-	if (gameState == GameStates.JOURNEY) {
-    	creature.draw(config.width/2 - 32, config.height/2 - 32);
-	}
+    	// Top Bar
+    	Hestia.fillRect(0, 6, config.width, 1, 3);
+    	Hestia.fillRect(0, 7, config.width, 1, 2);
+    	Hestia.fillRect(0, 8, config.width, 1, 1);
+    	
+    	// Background
+    	Hestia.fillRect(0, 9, config.width, 85, 3);
+    	
+    	// Title (7,8, then 9,10 (24 height)) 
+    	Hestia.drawSprite(7, 17, 17, 3);
+    	Hestia.drawSprite(8, 17+64, 17, 3);
+    	Hestia.drawSpriteSection(9, 17, 17+48, 0, 0, 64, 24, 3); // Could have packed these better
+    	Hestia.drawSpriteSection(10, 17+64, 17+48, 0, 0, 64, 24, 3); // Could have packed these better
+    	
+    	// Bottom Bar
+    	Hestia.fillRect(0, 94, config.width, 1, 2);
+    	Hestia.fillRect(0, 95, config.width, 1, 1);
+    	
+    	// Border
+    	Hestia.fillRect(0, 9, 1, 86, 1);
+    	Hestia.fillRect(config.width-1, 9, 1, 86, 1);
+    } else {
+    	Hestia.clear(3);
+    	if (gameState == GameStates.JOURNEY) {
+    	    // TODO: Draw portholes? with moving stars? (mock plz)
+    	    creature.draw(config.width/2 - 32, config.height/2 - 32);
+    	}
+    } 
 
 	for (let i = 0, l = uiElements.length; i < l; i++) {
         if (uiElements[i].active) { // differentiate active & visible
@@ -835,17 +902,15 @@ var TextBox = (function(){
 		charHeight: 8,	// ^^ as above
 		color: 0,
 		bgColor: 21,
+		indent: 0,
+		align: 0,
 		draw: function() {
 		    if (this.dirty) {
 		        this.dirty = false;
 		        this.recalculateDimensions();
 		    }
-			var indent = 0;
-			if (this.select) {
-				indent = 4;
-			}
 
-			var x = this.x, y = this.y, w = this.w, h = this.h,
+			var x = this.x, y = this.y, w = this.w, h = this.h, indent = this.indent
 				padding = this.padding, spacing = this.spacing, lines = this.lines,
 				select = this.select, index = this.index, c = this.color, charHeight = this.charHeight;
 
@@ -855,17 +920,28 @@ var TextBox = (function(){
 			}
 			
 			for(var i = 0; i < lines.length; i++) {
-				Hestia.drawText(lines[i], x + padding + indent, y + padding + (spacing + charHeight)*i, c);
+			    if (this.align === 0) {
+    				Hestia.drawText(lines[i], x + padding + indent, y + padding + (spacing + charHeight)*i, c);
+			    } else if (this.align === 1) {
+			        let lineWidth = Hestia.measureText(lines[i]);
+			        Hestia.drawText(lines[i], x + indent + Math.floor(((w - indent) / 2) - (lineWidth / 2)), y + padding + (spacing + charHeight)*i, c);
+			    } else {
+			        let lineWidth = Hestia.measureText(lines[i]);
+    				Hestia.drawText(lines[i], w - padding - lineWidth, y + padding + (spacing + charHeight)*i, c);
+			    }
 				
 				if (select && i == index) {
 					var px = x + padding;
-					var py = y + padding + (charHeight + spacing) * i + Math.floor(charHeight/2) - 1;
-					Hestia.setPixel(px, py, c);
-					Hestia.setPixel(px+1, py, c);
-					Hestia.setPixel(px, py+1, c);
-					Hestia.setPixel(px, py-1, c);
+					var py = y + padding + (charHeight + spacing) * i + Math.floor(charHeight/2);
+					this.drawSelect(px, py, c);
 				}
-			}		
+			}
+		},
+		drawSelect: function(px, py, c) {
+		    Hestia.setPixel(px, py - 1, c);
+			Hestia.setPixel(px+1, py - 1, c);
+			Hestia.setPixel(px, py, c);
+			Hestia.setPixel(px, py-2, c);
 		},
 		update: function() {
 			if (this.select) {
@@ -900,7 +976,7 @@ var TextBox = (function(){
 					maxWidthText = this.lines[i];
 				}
 			}
-			return Hestia.measureText(maxWidthText) + 2 * this.padding + indent;   // TODO: Adjust for kerning
+			return Hestia.measureText(maxWidthText) + 2 * this.padding + indent;
 		},
 		calculateMinHeight: function() {
 			return 2 * this.padding + this.lines.length*(this.charHeight+this.spacing) - (this.spacing+1);
@@ -934,6 +1010,18 @@ var TextBox = (function(){
 		textBox.actions = params.actions;
 		textBox.cancelAction = params.cancelAction;
 		textBox.width = params.width;
+		if (params.align !== undefined) {
+		    textBox.align = params.align;
+		}
+		if (params.indent !== undefined) {
+		    textBox.indent = params.indent;
+		} else {
+		    textBox.indent = textBox.select ? 4 : 0;
+		}
+		if (params.drawSelect) {
+    		textBox.drawSelect = params.drawSelect;
+		}
+
 		// TODO: Explicit height option (+ scrolling)
 		textBox.dirty = true;
 		return textBox;

@@ -47,7 +47,7 @@ var score = 0, journeysComplete = 0, tourLength = 3;
 var actionsBox, currentReactionBox;
 var debugUIs = [], journeyUIs = [];
 var journeyTick = 0, journeyLength = config.tickRate * 120;
-var interactionMessageShowTime = 3;
+var interactionMessageShowTime = 2.5;
 var creature, creatureUpdateInterval = config.tickRate;
 var simPaused;
 
@@ -160,7 +160,8 @@ var Creature = (function() {
             emotionId: "",
             category: -1,
             priority: -1,
-            desc: ""
+            desc: "",
+            time: 0
         };
         
         creature.calculateFeedback = function() {
@@ -222,13 +223,13 @@ var Creature = (function() {
                     if (creature.mood.emotionId === emotionDef.id
                         || creature.mood.category < category
                         || (creature.mood.category === category && creature.mood.priority <= emotionDef.priority)) {
-                        moodChanged = true;
                         // TODO: Mood should be combos of emotions not highest emotional need
                         creature.mood.emotionId = emotionDef.id;
                         creature.mood.category = category;
                         creature.mood.priority = emotionDef.priority;
                         if (creature.mood.desc != emotionDef.moods[category]) {
                             // Only reset timer for new mood desc (i.e. an entire new mood, rather than just new source)
+                            moodChanged = true;
                             creature.mood.desc = emotionDef.moods[category];
                             creature.mood.time = 0;
                         }
@@ -286,7 +287,7 @@ var kittyDef = {
                     break;
             }
         } else if (creature.health > creature.def.health / 2) {
-            desc = creature.name + "doesn't seem to be in the best of health";
+            desc = creature.name + " doesn't seem to be in the best of health";
         } else if (creature.health > 0) {
             desc = "What have you done to my kitty?";
         } else {
@@ -365,6 +366,7 @@ var kittyDef = {
         let result = {};
         let desc = "";
         let duration = interactionMessageShowTime * config.tickRate;
+        let recalculateMoodAfterDuration = false;
         if (creature.health == 0) {
             return {
                 duration: duration,
@@ -385,8 +387,8 @@ var kittyDef = {
                         desc = creature.name + " devours the food";
                     } else if (hunger > 10) {
                         creature.changeEmotion("cheer", 20);
-                        desc = creature.name + " happily eats the food";
-                        // TODO: Remove reference to happiness unless you're going to look up cheer
+                        desc = creature.name + " eats the food";
+                        // TODO: maybe add happiness reference based on cheer level
                     } else {
                         duration = 90;
                         desc = creature.name + " picks at the food";
@@ -444,13 +446,20 @@ var kittyDef = {
                 }
                 break;
             }
+            case "nap":
+            {
+                duration = 360 + Math.floor(Math.random() * 240);
+                desc = "You doze off";
+                recalculateMoodAfterDuration = true;
+                break;
+            }
             default:
                 desc = creature.name + " stares at you";
                 duration = 30;
                 break;
         }
 
-        return { desc: desc, duration: duration };
+        return { desc: desc, duration: duration, recalculateMoodAfterDuration: recalculateMoodAfterDuration };
     },
     draw: function(creature, x, y, isThumbnail) {
         // Kitty is 0 to 6
@@ -495,15 +504,30 @@ var kittyDef = {
 // TODO: Move actions + interaction to class / protype
 var interaction = function(index) { // TODO: Context / Options
     let interactionResult = creature.interact(actions[index]);
+    actionsBox.active = false;
     simPaused = true;
+    let after = interactionResult.recalculateMoodAfterDuration; 
     showMessageBox(interactionResult.desc, interactionMessageShowTime, function(){
-        let moodChanged = creature.recalculateMood();
-        runSimStep(interactionResult.durtion);
-        // ^^ Might be better to try to spread this, however this way has the nice
-        // effect of not updating the mood until after the interaction is complete
-        // but before running the extra sim steps (once we make moods have a min. time
-        // this will be more important).
-        simPaused = false;
+        actionsBox.active = true;
+        let moodChanged = false;
+        if (!after) { moodChanged = creature.recalculateMood(); }
+        runSimStep(Math.ceil(interactionResult.duration));
+        // ^^ Might be better to try to spread over display time
+        // but be aware of the visual needs of mood communication
+        if (after) { moodChanged = creature.recalculateMood(); }
+        if ((moodChanged || creature.health === 0)  && journeyTick >= journeyLength) {
+            // If end of journey and changed state wait for interactionMessageShowTime
+            // so the player can see the effect of the interaction
+            addRoutine(function(ticks) {
+                if (ticks > interactionMessageShowTime * config.tickRate) {
+                    simPaused = false;
+                    return true;
+                }
+                return false;
+            });
+        } else {
+            simPaused = false;
+        }
     })
 };
 
@@ -513,12 +537,10 @@ var showMessageBox = function(text, duration, callback) {
         currentReactionBox.width - 2 * currentReactionBox.padding);
     currentReactionBox.dirty = true;
     currentReactionBox.active = true;
-    actionsBox.active = false;  // Should this be outside?
     addRoutine(function(ticks) {
        // show progress bar for action
        if (ticks > 30 * duration) {
            currentReactionBox.active = false;
-           actionsBox.active = true;    // Should this be in callback?
            if (callback) {
                callback();
            }
@@ -536,6 +558,10 @@ var actions = [{
     name: "feed",
     desc: "Feed",
     interaction: function() { interaction(1); }
+}, {
+    name: "nap",
+    desc: "Nap",
+    interaction: function() { interaction(2); }
 }]; // Contextual Actions?
 
 var init = function() {
@@ -562,12 +588,13 @@ var init = function() {
     actionsBox = TextBox.create({ 
         x: 3,
         y: config.height - 24,
-        lines: [ actions[0].desc, actions[1].desc],
+        lines: [ actions[0].desc, actions[1].desc, actions[2].desc],
         color: 0,
         bgColor: 3,
         select: true,
-        actions: [ actions[0].interaction, actions[1].interaction],
-        width: config.width - 6
+        actions: [ actions[0].interaction, actions[1].interaction, actions[2].interaction],
+        width: config.width - 6,
+        grid: [ 2, 2 ]
     });
     addUIElement(actionsBox);
     journeyUIs.push(actionsBox);
@@ -772,6 +799,7 @@ var setGameState = function(index) {
             scheduleGameStateChange(GameStates.JOURNEY);
             break;
         case GameStates.JOURNEY:
+            simPaused = false;
             toggleJourneyUIs(true);
             break;
         case GameStates.JOURNEY_COMPLETE:
@@ -786,9 +814,9 @@ var setGameState = function(index) {
             showMessageBox(feedback, 2, function(){
                 let text;
                 if (creature.health > 0) {
-                    text = "You kept it alive! :D";
+                    text = "You kept it alive!";
                 } else {
-                    text = "You failed to keep it alive. :(";
+                    text = "You failed to keep it alive.";
                 }
                 showMessageBox(text, 2, function(){
                         // TODO: Show prompt for continuing
@@ -923,6 +951,7 @@ var TextBox = (function(){
 		bgColor: 21,
 		indent: 0,
 		align: 0,
+		grid: undefined,
 		draw: function() {
 		    if (this.dirty) {
 		        this.dirty = false;
@@ -939,19 +968,30 @@ var TextBox = (function(){
 			}
 			
 			for(var i = 0; i < lines.length; i++) {
-			    if (this.align === 0) {
-    				Hestia.drawText(lines[i], x + padding + indent, y + padding + (spacing + charHeight)*i, c);
-			    } else if (this.align === 1) {
+			    var bx = x + padding + indent;
+			    var by = y + padding + (spacing + charHeight)*i;
+			    var bw = w;
+
+                if (this.grid) {
+                    bw = w / this.grid[1];
+                    bx = x + padding + indent + Math.floor(Math.floor(i / this.grid[0]) * bw);
+                    by = y + padding + (spacing + charHeight) * (i % this.grid[0]);
+                }
+                var tx = bx;
+			    
+			    if (this.align === 1) {
+    		        let lineWidth = Hestia.measureText(lines[i]);
+			        tx = bx - padding + Math.floor(((bw - indent) / 2) - (lineWidth / 2));
+			    } else if (this.align == 2) {
 			        let lineWidth = Hestia.measureText(lines[i]);
-			        Hestia.drawText(lines[i], x + indent + Math.floor(((w - indent) / 2) - (lineWidth / 2)), y + padding + (spacing + charHeight)*i, c);
-			    } else {
-			        let lineWidth = Hestia.measureText(lines[i]);
-    				Hestia.drawText(lines[i], w - padding - lineWidth, y + padding + (spacing + charHeight)*i, c);
+			        tx =  bw - padding - lineWidth;
 			    }
+
+				Hestia.drawText(lines[i], tx, by, c);
 				
 				if (select && i == index) {
-					var px = x + padding;
-					var py = y + padding + (charHeight + spacing) * i + Math.floor(charHeight/2);
+					var px = bx - indent;
+					var py = by + Math.floor(charHeight/2);
 					this.drawSelect(px, py, c);
 				}
 			}
@@ -964,12 +1004,31 @@ var TextBox = (function(){
 		},
 		update: function() {
 			if (this.select) {
-				if (Hestia.buttonUp(2)) {
-					this.index = (this.index - 1 + this.lines.length) % this.lines.length;
-				}
-				if (Hestia.buttonUp(3)) {
-					this.index = (this.index + 1) % this.lines.length;
-				}
+			    if (this.grid) {
+			        let targetIndex = this.index;
+                    if (Hestia.buttonUp(0)) {
+                        targetIndex = this.index - this.grid[0];
+                    }
+                    if (Hestia.buttonUp(1)) {
+                        targetIndex = this.index + this.grid[0];   
+                    }
+                    if (Hestia.buttonUp(2) && this.index % this.grid[0] != 0) {
+                        targetIndex = this.index - 1; 
+                    }
+                    if (Hestia.buttonUp(3) && this.index % this.grid[0] != this.grid[1] - 1) {
+                        targetIndex = this.index + 1;
+                    }
+                    if (targetIndex >= 0 && targetIndex < this.lines.length) {
+                        this.index = targetIndex;
+                    }
+			    } else {
+    				if (Hestia.buttonUp(2)) {
+    					this.index = (this.index - 1 + this.lines.length) % this.lines.length;
+    				}
+    				if (Hestia.buttonUp(3)) {
+    					this.index = (this.index + 1) % this.lines.length;
+    				}			        
+			    }
 				if (Hestia.buttonUp(4) && this.actions[this.index]) {
 				    this.actions[this.index]();
 				}
@@ -983,10 +1042,8 @@ var TextBox = (function(){
 			this.h = this.calculateMinHeight();
 		},
 		calculateMinWidth: function() {
-			var indent = 0;
-			if (this.select) {
-				indent = 3;
-			}
+		    // TODO: Update for grid (check each column against grid column width)
+		    // can assume uniform column widths (for now...)
 			var maxWidth = 0;
 			var maxWidthText = "";
 			for(var i = 0; i < this.lines.length; i++) {
@@ -995,10 +1052,15 @@ var TextBox = (function(){
 					maxWidthText = this.lines[i];
 				}
 			}
-			return Hestia.measureText(maxWidthText) + 2 * this.padding + indent;
+			// TODO: Don't assume the longest string is the widest
+			return Hestia.measureText(maxWidthText) + 2 * this.padding + this.indent;
 		},
 		calculateMinHeight: function() {
-			return 2 * this.padding + this.lines.length*(this.charHeight+this.spacing) - (this.spacing+1);
+		    if (this.grid) {
+		        return 2 * this.padding + this.grid[0] * (this.charHeight + this.spacing) - (this.spacing + 1);
+		    } else {
+    			return 2 * this.padding + this.lines.length*(this.charHeight+this.spacing) - (this.spacing + 1);
+		    }
 		}
 	};
 	
@@ -1039,6 +1101,9 @@ var TextBox = (function(){
 		}
 		if (params.drawSelect) {
     		textBox.drawSelect = params.drawSelect;
+		}
+		if (params.grid !== undefined) {
+		    textBox.grid = params.grid; 
 		}
 
 		// TODO: Explicit height option (+ scrolling)

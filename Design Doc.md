@@ -100,19 +100,21 @@ x Sprite(s) for the Space Kitty (64x64) + mini for intro (32x32)
 x Moods should have a minimum time, then wear off and re-evalute.
 x Add Take a Nap function (just skips time) - make it easy to neglect but skips time and gives people a reason - but then they're responsible for this not the systems
 
+o Minimum Height to show message
+
 ### Mocks
-o Some actual UI design
+x Some actual UI design
 	Main Menu, Intro, Journey Report, Tour Report
 	Main Screen: Should show name + species, number of deaths, journey progress
 X Main Menu Screen
-o Intro Screen (needs to communicate you're part of a haulage firm)
-o Journey Report Screen
-o Tour Report Screen
+x Intro Screen (needs to communicate you're part of a haulage firm)
+x Journey Report Screen
+x Tour Report Screen
 o Star field on main menu
 
 o Pretty boxes (double borders?) - mock please
 
-o Succesful Tour Count on main screen (you get a commendation if you complete with 0 deaths)
+x Succesful Tour Count on main screen (you get a commendation if you complete with 0 deaths)
 
 o TODO - reposition and/or resize numbers (i.e. make positioning match lower case, or size match uppercase so the Kerning doesn't look awful)
 
@@ -125,6 +127,6 @@ o More Creatures => dead parrot, the blob etc - consider encouraged behaviour wi
 
 o Probably too much for this Jam, but in retrospect would have been good to have a day/night cycle to help guide timings and add some variation to need growth rates / rhythm to looking after things (and some creatures could be noctornal) - also dangerous for them to be very hungry when night comes (also you could config gremlins).
 
-o Variable Journey Lengths
+x Variable Journey Lengths
 (?) o Inspect option to check health / tiredness
 

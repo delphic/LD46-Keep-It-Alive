@@ -90,11 +90,27 @@ x Display current mood function (depending on creature may or may not be easily 
 x ADD DEATH - I guess maybe a health bar that ticks down? when full need on essential needs
 x Trip progress bar
 x Rewards
-
-o Main Menu Screen
-o Score Screen
-
 x Make interactions pause sim for whilst displaying, but then iterrate sim a specified number of ticks (including checks for and increase of journeyTick)
+- Change Mood descriptions to behaviour for that mood descriptions (using sprites instead)
+x balance pass - cheer drops like a stone (if you just play with the kitty as soon as prompted they end up unhappy, that might be fixed by cheer base line), also values are such that they go sleepy for just a moment. 
+x Sprite(s) for the Space Kitty (64x64) + mini for intro (32x32)
+	So *need* an idle/indifferent pose, would also like "wants to play", "needs something", "miserable/unwell", "sleepy"
+	x Update sleep with zZz
+	x Icon for journey and death (fix into char size)
+
+### Mocks
+o Some actual UI design
+	Main Menu, Intro, Journey Report, Tour Report
+	Main Screen: Should show name + species, number of deaths, journey progress
+X Main Menu Screen
+o Intro Screen (needs to communicate you're part of a haulage firm)
+o Journey Report Screen
+o Tour Report Screen
+
+o Pretty boxes (double borders?) - mock please
+
+x Moods should have a minimum time, then wear off and re-evalute.
+o Tour Count on main screen
 
 o TODO - reposition and/or resize numbers (i.e. make positioning match lower case, or size match uppercase so the Kerning doesn't look awful)
 
@@ -103,20 +119,6 @@ o Add Take a Nap function (just skips time) - make it easy to neglect but skips 
 o (!Dangerous) Cheer / emotion base line and track back when not in need extremes.
 	Will upset existing balance which is more or less working for kitty, however this *should* be there
 
-o Moods should have a minimum time, then wear off and re-evalute.
-o Change Mood descriptions to behaviour for that mood descriptions
-
-x balance pass - cheer drops like a stone (if you just play with the kitty as soon as prompted they end up unhappy, that might be fixed by cheer base line), also values are such that they go sleepy for just a moment. 
-
-x Sprite(s) for the Space Kitty (64x64) + mini for intro (32x32)
-	So *need* an idle/indifferent pose, would also like "wants to play", "needs something", "miserable/unwell", "sleepy"
-	x Update sleep with zZz
-	x Icon for journey and death (fix into char size)
-
-o Some actual UI design
-	Main Menu, Intro, Journey Report, Tour Report
-	Main Screen: Should show name + species, number of deaths, journey progress
-q
 o More Creatures => dead parrot, the blob etc - consider encouraged behaviour with each creature type
 	o Starting creatures on different need levels and health levels
 	o Difficult creatures, which may refuse to eat even when they need to

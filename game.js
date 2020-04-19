@@ -49,7 +49,7 @@ var debugUIs = [], journeyUIs = [];
 var journeyTick = 0, journeyLength = config.tickRate * 120;
 var interactionMessageShowTime = 3;
 var creature, creatureUpdateInterval = config.tickRate;
-var pauseSim;
+var simPaused;
 
 var toggleDebugUI = function(value) {
     if (debug && debugBars) {
@@ -227,7 +227,11 @@ var Creature = (function() {
                         creature.mood.emotionId = emotionDef.id;
                         creature.mood.category = category;
                         creature.mood.priority = emotionDef.priority;
-                        creature.mood.desc = emotionDef.moods[category];
+                        if (creature.mood.desc != emotionDef.moods[category]) {
+                            // Only reset timer for new mood desc (i.e. an entire new mood, rather than just new source)
+                            creature.mood.desc = emotionDef.moods[category];
+                            creature.mood.time = 0;
+                        }
                     }
                 }
             }
@@ -250,6 +254,7 @@ var kittyDef = {
     names: [ "Floofmiester", "Prof. Jiggly", "Fuzzy Boots", "Beans" ],
     desc: "Space Kitty",
     health: 100,
+    moodTime: 4, 
     needs: [
         { "id": "play", "growth": 2, "value": 40, "priority": 3 },
         { "id": "food", "growth": 1, "value": 40, "priority": 5 }
@@ -338,13 +343,21 @@ var kittyDef = {
                 creature.mood.category = 100;
                 creature.mood.priority = 100;
                 creature.mood.desc = "Dead";
+                creature.mood.time = 0;
             }
         } else if (creature.health < creature.def.health && creature.needs["food"].value < 50) {
             // TODO: Iff rested
             creature.health += 1;
         }
         
-        creature.recalculateMood();
+        if (!simPaused) {
+            // It's more important for time in mood to be visually accurate than sim accurate
+            // So only increase if sim is running naturally (rather than being sped up)
+            creature.mood.time += creatureUpdateInterval / config.tickRate;
+        }
+        if (creature.mood.time > creature.def.moodTime) {
+            creature.recalculateMood();
+        }
         
     },
     responses: function(creature, action) {
@@ -482,7 +495,7 @@ var kittyDef = {
 // TODO: Move actions + interaction to class / protype
 var interaction = function(index) { // TODO: Context / Options
     let interactionResult = creature.interact(actions[index]);
-    pauseSim = true;
+    simPaused = true;
     showMessageBox(interactionResult.desc, interactionMessageShowTime, function(){
         let moodChanged = creature.recalculateMood();
         runSimStep(interactionResult.durtion);
@@ -490,7 +503,7 @@ var interaction = function(index) { // TODO: Context / Options
         // effect of not updating the mood until after the interaction is complete
         // but before running the extra sim steps (once we make moods have a min. time
         // this will be more important).
-        pauseSim = false;
+        simPaused = false;
     })
 };
 
@@ -528,18 +541,17 @@ var actions = [{
 var init = function() {
     // Menu UI init
     mainMenuBox = TextBox.create({
-        x: (config.width/2) - 25,
-        y: 107,
-        lines: [ "Start" ],
+        x: (config.width/2) - 35,
+        y: 112,
+        lines: [ "New Tour" ],
         color: 1,
         bgColor: 3,
         select: true,
-        width: 50,
+        width: 70,
         padding: 6,
         indent: 9,
         align: 1,
         drawSelect: function(x, y) {
-            // TODO: Offset from aim point
             Hestia.drawSpriteSection(6, x, y-4, 32, 8, 8, 8, 3);
         },
         actions: [ function(){ scheduleGameStateChange(GameStates.INTRO); } ]
@@ -633,10 +645,11 @@ var init = function() {
         color: 1,
         text: "",
         update: function() {
-            this.text = "" + (journeysComplete - score) + "deaths";
+            this.text = "" + (journeysComplete - score);
         },
         draw: function() {
-            Hestia.drawText(this.text, this.x, this.y, this.color);
+            Hestia.drawSpriteSection(6, this.x, this.y, 32, 0, 8, 8, 3);
+            Hestia.drawText(this.text, this.x + 10, this.y, this.color);
         }
     };
     addUIElement(scoreText);
@@ -651,7 +664,8 @@ var init = function() {
             this.text = "" + (journeysComplete) + "/" + tourLength;
         },
         draw: function() {
-            Hestia.drawText(this.text, this.x, this.y, this.color);
+            Hestia.drawSpriteSection(6, this.x, this.y, 32, 8, 8, 8, 3);
+            Hestia.drawText(this.text, this.x + 10, this.y, this.color);
         }
     };
     addUIElement(toursText);
@@ -811,7 +825,7 @@ var update = function() {
     updateRoutines();
     
     if (gameState == GameStates.JOURNEY) {
-        if (!pauseSim) {
+        if (!simPaused) {
             if (journeyTick >= journeyLength) {
                 scheduleGameStateChange(GameStates.JOURNEY_COMPLETE);
             } else {

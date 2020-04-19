@@ -51,7 +51,68 @@ var interactionMessageShowTime = 2.5;
 var creature, creatureUpdateInterval = config.tickRate;
 var simPaused;
 
+var createDebugUI = function() {
+    if (debug && debugBars) {
+        let moodText = {
+            x: config.width - 1,
+            y: 26,
+            color: 2,
+            text: "",
+            update: function() {
+                this.text = creature.mood.desc;
+            },
+            draw: function() {
+                if (this.text) {
+                    // right aligned
+                    let width = Hestia.measureText(this.text);
+                    Hestia.drawText(this.text, this.x - width , this.y, this.color);
+                }
+            }
+        };
+        debugUIs.push(moodText);
+        addUIElement(moodText);
+        
+        let yOffset = 26;
+        let healthBar = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: function() { return creature.health / creature.def.health; } })
+        healthBar.label = "+";
+        addUIElement(healthBar);
+        debugUIs.push(healthBar);
+        yOffset += 10;
+        
+        let createNeedValueDelegate = function(needId) {
+            return function() { return creature.needs[needId].value / 100; };
+        };
+        let needBars = [];
+        for (let i = 0, l = kittyDef.needs.length; i < l; i++) {
+            let need = kittyDef.needs[i];
+            needBars[i] = ProgressBar.create({ x: 1, y: yOffset, width: 64, height: 3, valueDelegate: createNeedValueDelegate(need.id) });
+            needBars[i].label = need.id[0].toUpperCase();
+            addUIElement(needBars[i]);
+            debugUIs.push(needBars[i]);
+            yOffset += 8;
+        }
+        yOffset += 2;
+        
+        let createEmotionValueDelegate = function(emotionId) {
+            return function() { return (creature.emotions[emotionId].value + 50) / 100; };
+        };
+        let emotionBars = [];
+        for (let i = 0, l = kittyDef.emotions.length; i < l; i++) {
+            let emotion = kittyDef.emotions[i];
+            emotionBars[i] = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: createEmotionValueDelegate(emotion.id) })
+            emotionBars[i].label = emotion.id[0].toUpperCase();
+            debugUIs.push(emotionBars[i]);
+            addUIElement(emotionBars[i]);
+            yOffset += 8;
+        } 
+    }
+};
+
 var toggleDebugUI = function(value) {
+    if (debugUIs.length === 0) {
+        createDebugUI();
+    }
+    
     if (debug && debugBars) {
         for (let i = 0, l = debugUIs.length; i < l; i++) {
             debugUIs[i].active = value;
@@ -218,15 +279,22 @@ var Creature = (function() {
                 let emotionDef = creature.def.emotions[i];
                 let previousCategory = creature.emotionalCategories[i];
                 let category = creature.getEmotionalAttentionNeed(emotionDef.id, emotionDef.invert);
+                let priority = emotionDef.priority;
+                if (category === 4 && emotionDef.overridePriority !== undefined && creature.health < creature.def.health) {
+                    previousCategory -= 1; // HACK - so we pass the "has changed" check
+                    // Because we're overriding priority not category
+                    priority = emotionDef.overridePriority;
+                }
+                
                 if (category != previousCategory || creature.mood.category < category) {
                     creature.emotionalCategories[i] = category;
                     if (creature.mood.emotionId === emotionDef.id
                         || creature.mood.category < category
-                        || (creature.mood.category === category && creature.mood.priority <= emotionDef.priority)) {
+                        || (creature.mood.category === category && creature.mood.priority <= priority)) {
                         // TODO: Mood should be combos of emotions not highest emotional need
                         creature.mood.emotionId = emotionDef.id;
                         creature.mood.category = category;
-                        creature.mood.priority = emotionDef.priority;
+                        creature.mood.priority = priority;
                         if (creature.mood.desc != emotionDef.moods[category]) {
                             // Only reset timer for new mood desc (i.e. an entire new mood, rather than just new source)
                             moodChanged = true;
@@ -255,17 +323,18 @@ var kittyDef = {
     names: [ "Floofmiester", "Prof. Jiggly", "Fuzzy Boots", "Beans" ],
     desc: "Space Kitty",
     health: 100,
-    moodTime: 4, 
+    moodTime: 4,
     needs: [
         { "id": "play", "growth": 2, "value": 40, "priority": 3 },
         { "id": "food", "growth": 1, "value": 40, "priority": 5 }
         // TODO: Rest Need
     ],
     emotions: [
-        { "id": "cheer", "value": 0, "priority": 2, "invert": true, "moods": [ "Happy", "Content", "Indifferent", "Unhappy", "Miserable" ] },
+        { "id": "cheer", "value": 0, "priority": 2, "invert": true, "moods": [ "Happy", "Content", "Indifferent", "Unhappy", "Miserable" ], "overridePriority": 6 },
         { "id": "hunger", "value": 10, "priority": 5, "moods": [ "Stated", "Sleepy", "Indifferent", "Hungry", "Ravenous"] },
         { "id": "playfulness", "value": 10, "priority": 4, "moods": [ "Asleep", "Sleepy", "Indifferent", "Playful", "Restless"] }
         // anger?
+        // TODO: Method or mapping for emotion priority based on current category 
     ],
     calculateFeedback: function(creature) { 
         let score = 0;
@@ -301,12 +370,13 @@ var kittyDef = {
         for (let i = 0, l = creature.def.emotions.length; i < l; i++) {
             let emotionDef = creature.def.emotions[i];
             let category = creature.getEmotionalAttentionNeed(emotionDef.id, emotionDef.invert);
+            let priority = emotionDef.priority;
             creature.emotionalCategories.push(category);
             if (category > highestEmotionCategory 
-                || (category == highestEmotionCategory && highestEmotionPriority < emotionDef.priority)) {
+                || (category == highestEmotionCategory && highestEmotionPriority < priority)) {
                 highestEmotionId = emotionDef.id;
                 highestEmotionCategory = category;
-                highestEmotionPriority = emotionDef.priority;
+                highestEmotionPriority = priority;
                 highestEmotionDesc = emotionDef.moods[category];
             }
         }
@@ -697,62 +767,6 @@ var init = function() {
     };
     addUIElement(toursText);
     journeyUIs.push(toursText);
-
-    // Debug Bars
-    if (debug && debugBars) {
-        let moodText = {
-            x: config.width - 1,
-            y: 24,
-            color: 2,
-            text: "",
-            update: function() {
-                this.text = creature.mood.desc;
-            },
-            draw: function() {
-                if (this.text) {
-                    // right aligned
-                    let width = Hestia.measureText(this.text);
-                    Hestia.drawText(this.text, this.x - width , this.y, this.color);
-                }
-            }
-        };
-        debugUIs.push(moodText);
-        addUIElement(moodText);
-        
-        let yOffset = 18;
-        let healthBar = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: function() { return creature.health / creature.def.health; } })
-        healthBar.label = "+";
-        addUIElement(healthBar);
-        debugUIs.push(healthBar);
-        yOffset += 10;
-        
-        let createNeedValueDelegate = function(needId) {
-            return function() { return creature.needs[needId].value / 100; };
-        };
-        let needBars = [];
-        for (let i = 0, l = kittyDef.needs.length; i < l; i++) {
-            let need = kittyDef.needs[i];
-            needBars[i] = ProgressBar.create({ x: 1, y: yOffset, width: 64, height: 3, valueDelegate: createNeedValueDelegate(need.id) });
-            needBars[i].label = need.id[0].toUpperCase();
-            addUIElement(needBars[i]);
-            debugUIs.push(needBars[i]);
-            yOffset += 8;
-        }
-        yOffset += 2;
-        
-        let createEmotionValueDelegate = function(emotionId) {
-            return function() { return (creature.emotions[emotionId].value + 50) / 100; };
-        };
-        let emotionBars = [];
-        for (let i = 0, l = kittyDef.emotions.length; i < l; i++) {
-            let emotion = kittyDef.emotions[i];
-            emotionBars[i] = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: createEmotionValueDelegate(emotion.id) })
-            emotionBars[i].label = emotion.id[0].toUpperCase();
-            debugUIs.push(emotionBars[i]);
-            addUIElement(emotionBars[i]);
-            yOffset += 8;
-        } 
-    }
 
     setGameState(GameStates.MAIN_MENU);
 };

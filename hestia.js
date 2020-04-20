@@ -3,26 +3,6 @@
 var HestiaAudio = module.exports = function() {
     var exports = {};
 
-    (function(){
-        // Chrome does not obey the standard specification because they don't
-        // want to add more UI to their browser and would rather break all
-        // games and experiments that use WebAudio - fuck you google.
-        // Auto-resume audio context on any user interaction
-        const eventNames = [ 'click', 'contextmenu', 'auxclick', 'dblclick', 'mousedown', 'mouseup', 'pointerup', 'touchend', 'keydown', 'keyup' ];
-        var resumeAudioContext = function(event) {
-            if (audioContext.state == "suspended") {
-                audioContext.resume();
-            }
-            for(let i = 0; i < eventNames.length; i++) {
-                document.removeEventListener(eventNames[i], resumeAudioContext);
-            }
-        };
-
-        for(let i = 0; i < eventNames.length; i++) {
-            document.addEventListener(eventNames[i], resumeAudioContext);
-        }
-    })();
-
     // Working initially from - https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Simple_synth
     // var audioContext = new window.AudioContext();
     var oscList = [];   // Has same structure as noteTable, index by octave and then dictionary by note

@@ -148,7 +148,7 @@ x More Creatures => dead parrot, the blob etc - consider encouraged behaviour wi
 	o Starting creatures on different need levels and health levels
 	o Difficult creatures, which may refuse to eat even when they need to
 
-o Improve Text for Kassa 
+x Improve Text for Kassa 
 
 o Probably too much for this Jam, but in retrospect would have been good to have a day/night cycle to help guide timings and add some variation to need growth rates / rhythm to looking after things (and some creatures could be noctornal) - also dangerous for them to be very hungry when night comes (also you could config gremlins).
 

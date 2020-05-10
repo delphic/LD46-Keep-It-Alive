@@ -2,50 +2,30 @@
 "use strict";
 var HestiaAudio = module.exports = function() {
     var exports = {};
-    
-    (function(){
-        // Chrome does not obey the standard specification because they don't
-        // want to add more UI to their browser and would rather break all 
-        // games and experiments that use WebAudio - fuck you google.
-        // Auto-resume audio context on any user interaction
-        const eventNames = [ 'click', 'contextmenu', 'auxclick', 'dblclick', 'mousedown', 'mouseup', 'pointerup', 'touchend', 'keydown', 'keyup' ];
-        var resumeAudioContext = function(event) {
-            if (audioContext.state == "suspended") {
-                audioContext.resume();
-            }
-            for(let i = 0; i < eventNames.length; i++) {
-                document.removeEventListener(eventNames[i], resumeAudioContext);
-            }
-        };
-        
-        for(let i = 0; i < eventNames.length; i++) {
-            document.addEventListener(eventNames[i], resumeAudioContext);
-        }
-    })();
-    
+
     // Working initially from - https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Simple_synth
-    var audioContext = new window.AudioContext();
+    // var audioContext = new window.AudioContext();
     var oscList = [];   // Has same structure as noteTable, index by octave and then dictionary by note
     var masterGainNode = null;
     var waveforms = [ "sine", "square", "sawtooth", "triangle" ];
-    
+
     var noteTable, customWaveform, sineTerms, cosineTerms;
-    
+
     // We might want the note tabe indexed by number with a mapping to/from note
     var createNoteTable = function() {
         let noteFreq = [];
         for (let i = 0; i < 9; i++) {
             noteFreq[i] = [];
         }
-        
+
         // Is this a common limitation on 0, and 8th octaves?
         // I presume it's a piano thing
         // 88 notes here (12 per full ocative)
-        
+
         noteFreq[0]["A"] = 27.500000000000000;
         noteFreq[0]["A#"] = 29.135235094880619;
         noteFreq[0]["B"] = 30.867706328507756;
-        
+
         noteFreq[1]["C"] = 32.703195662574829;
         noteFreq[1]["C#"] = 34.647828872109012;
         noteFreq[1]["D"] = 36.708095989675945;
@@ -58,7 +38,7 @@ var HestiaAudio = module.exports = function() {
         noteFreq[1]["A"] = 55.000000000000000;
         noteFreq[1]["A#"] = 58.270470189761239;
         noteFreq[1]["B"] = 61.735412657015513;
-        
+
         noteFreq[2]["C"] = 65.406391325149658;
         noteFreq[2]["C#"] = 69.295657744218024;
         noteFreq[2]["D"] = 73.416191979351890;
@@ -71,7 +51,7 @@ var HestiaAudio = module.exports = function() {
         noteFreq[2]["A"] = 110.000000000000000;
         noteFreq[2]["A#"] = 116.540940379522479;
         noteFreq[2]["B"] = 123.470825314031027;
-        
+
         noteFreq[3]["C"] = 130.812782650299317;
         noteFreq[3]["C#"] = 138.591315488436048;
         noteFreq[3]["D"] = 146.832383958703780;
@@ -84,7 +64,7 @@ var HestiaAudio = module.exports = function() {
         noteFreq[3]["A"] = 220.000000000000000;
         noteFreq[3]["A#"] = 233.081880759044958;
         noteFreq[3]["B"] = 246.941650628062055;
-        
+
         noteFreq[4]["C"] = 261.625565300598634;
         noteFreq[4]["C#"] = 277.182630976872096;
         noteFreq[4]["D"] = 293.664767917407560;
@@ -97,7 +77,7 @@ var HestiaAudio = module.exports = function() {
         noteFreq[4]["A"] = 440.000000000000000;
         noteFreq[4]["A#"] = 466.163761518089916;
         noteFreq[4]["B"] = 493.883301256124111;
-        
+
         noteFreq[5]["C"] = 523.251130601197269;
         noteFreq[5]["C#"] = 554.365261953744192;
         noteFreq[5]["D"] = 587.329535834815120;
@@ -110,7 +90,7 @@ var HestiaAudio = module.exports = function() {
         noteFreq[5]["A"] = 880.000000000000000;
         noteFreq[5]["A#"] = 932.327523036179832;
         noteFreq[5]["B"] = 987.766602512248223;
-        
+
         noteFreq[6]["C"] = 1046.502261202394538;
         noteFreq[6]["C#"] = 1108.730523907488384;
         noteFreq[6]["D"] = 1174.659071669630241;
@@ -123,7 +103,7 @@ var HestiaAudio = module.exports = function() {
         noteFreq[6]["A"] = 1760.000000000000000;
         noteFreq[6]["A#"] = 1864.655046072359665;
         noteFreq[6]["B"] = 1975.533205024496447;
-       
+
         noteFreq[7]["C"] = 2093.004522404789077;
         noteFreq[7]["C#"] = 2217.461047814976769;
         noteFreq[7]["D"] = 2349.318143339260482;
@@ -136,7 +116,7 @@ var HestiaAudio = module.exports = function() {
         noteFreq[7]["A"] = 3520.000000000000000;
         noteFreq[7]["A#"] = 3729.310092144719331;
         noteFreq[7]["B"] = 3951.066410048992894;
-        
+
         noteFreq[8]["C"] = 4186.009044809578154;
         return noteFreq;
     };
@@ -155,27 +135,27 @@ var HestiaAudio = module.exports = function() {
 
     // TODO: Try sequence of volumes and pitches using the same oscilator
     // scheduling them in advance i.e. play SFX which specifies up to 32 notes
-    // with volumes (start with one instrument and then look a mixing it up) and 
+    // with volumes (start with one instrument and then look a mixing it up) and
     // a playback spead
 
     exports.playNote = function(octave, note, waveformIndex, duration, delay) {
         let freq = 0;
         if (octave > 0 && octave < noteTable.length) {
             freq = noteTable[octave][note];
-        } 
-        
+        }
+
         if (!freq) {
             console.error("Unable to find frequency for " + octave + " " + note);
             return;
         }
-        
+
         // Well you can't call start more than once, so make a new one every time!
         let osc = audioContext.createOscillator();
         osc.connect(masterGainNode);
-        // Would like to check out tracker implementations to see if this is 
+        // Would like to check out tracker implementations to see if this is
         // how they do things or if there is anyway to reuse.
         // Maybe we could disconnect the node or change the gain
-        
+
         if (waveformIndex < waveforms.length) {
             osc.type = waveforms[waveformIndex];
         } else {
@@ -184,9 +164,9 @@ var HestiaAudio = module.exports = function() {
             // Here are some tasy wavetables:
             // https://github.com/GoogleChromeLabs/web-audio-samples/tree/gh-pages/samples/audio/wave-tables
         }
-        
+
         osc.frequency.value = freq;
-        
+
         if (delay === undefined) {
             delay = 0;
         }
@@ -194,14 +174,14 @@ var HestiaAudio = module.exports = function() {
             // 120 bpm, 1 note
             duration = 0.5;
         }
-        
+
         osc.start(audioContext.currentTime + delay);
         osc.stop(audioContext.currentTime + delay + duration);
 
         oscList[octave][note] = osc;
         return osc;
     };
-    
+
     exports.stopNote = function(octave, note) {
         if (octave > 0 && octave < oscList.length) {
             let osc = oscList[octave][note];
@@ -213,7 +193,7 @@ var HestiaAudio = module.exports = function() {
 
     exports.init = function() {
         noteTable = createNoteTable();
-        
+
         masterGainNode = audioContext.createGain();
         masterGainNode.connect(audioContext.destination);
         masterGainNode.gain.value = 1;
@@ -222,16 +202,16 @@ var HestiaAudio = module.exports = function() {
         sineTerms = new Float32Array([0, 0, 1, 0, 1]);
         cosineTerms = new Float32Array(sineTerms.length);
         customWaveform = audioContext.createPeriodicWave(cosineTerms, sineTerms);
-        // This is super cool, would be good to 
+        // This is super cool, would be good to
         // i) visualise
         // ii) allow configuration of custom wave forms
         // I wonder if samples in Mod trackers are created this way?
-        
+
         for (let i = 0; i < noteTable.length; i++) {
             oscList[i] = [];
         }
     };
-    
+
     return exports;
 }();
 },{}],2:[function(require,module,exports){
@@ -334,7 +314,7 @@ module.exports = {
 		"<": [0,0,0,0,1,0,1,0,0,0,1,0,0,0,0],
 		">": [0,0,0,0,1,0,0,0,1,0,1,0,0,0,0],
 		/* This was transcribed by hand but it'd be good to make a util to read an image and output this data */
-		/* Could use a variations on the palettise function, just need to check the alpha channel tho! */ 
+		/* Could use a variations on the palettise function, just need to check the alpha channel tho! */
 	}
 };
 },{}],3:[function(require,module,exports){
@@ -356,8 +336,8 @@ var audio = Hestia.audio = require('./audio.js');   // Exposing interface for te
 
 // init - expected config parameters:
 // 'canvas' the canvas html element to use with Hestia
-// 'width' canvas width in pixels, 
-// 'height' canvas height in pixels 
+// 'width' canvas width in pixels,
+// 'height' canvas height in pixels
 // 'pixelRatio' pixel display ratio
 // 'palette' path to palette JSON
 // 'spriteSheet' object with path to spriteSheet img and spriteSize
@@ -380,12 +360,12 @@ Hestia.init = function(config) {
 	} else {
 		loadPalette("palettes/aseprite.json");
 	}
-	
-	// Set Sprite Sheet 
+
+	// Set Sprite Sheet
 	if (config.spriteSheet && config.spriteSheet.path) {
 		loadSpriteSheet(config.spriteSheet.path, config.spriteSheet.spriteSize);
 	}
-	
+
 	// Set Font
 	if (config.font && config.font.path) {
 	    loadFont(config.font);
@@ -415,15 +395,15 @@ Hestia.init = function(config) {
 
 	// Input
 	input.init(canvas, config.keys);
-	
+
 	// Audio
-	audio.init();
+	// audio.init();
 };
 
 Hestia.run = function() {
 	pause = false;
 	lastTime = 0;
-	window.requestAnimationFrame(tick);	
+	window.requestAnimationFrame(tick);
 	if (hideCursor) {
 	    canvas.classList.add("hideCursor");
 	}
@@ -443,7 +423,7 @@ Hestia.stop = function() {
 };
 
 // Input Querying
-// Keeping the public API flat 
+// Keeping the public API flat
 Hestia.button = function(btn) {
 	return input.getKey(btn);
 };
@@ -483,8 +463,8 @@ var loadSpriteSheet = Hestia.loadSpriteSheet = function(path, spriteSize) {
 	lockCount += 1;
 	spriteSheet = new Image();
 	spriteSheet.spriteSize = spriteSize;
-	fetch(path).then(function(response) { 
-		return response.blob(); 
+	fetch(path).then(function(response) {
+		return response.blob();
 	}).then(function(blob) {
 		spriteSheet.src = URL.createObjectURL(blob);
 		let pollId = window.setInterval(function() {
@@ -531,7 +511,7 @@ var loadPalette = Hestia.loadPalette = function(path, callback) {
 	    setPaletteIndex(0);
 		lockCount -= 1;
 		if (callback) { callback(); }
-	}).catch(function(error) { 
+	}).catch(function(error) {
 		console.log("Load Palette Failed: " + error.message);
 		lockCount -= 1;
 		if (callback) { callback(); }
@@ -548,7 +528,7 @@ var setPixel = Hestia.setPixel = function(x, y, c) {
 var fillRect = Hestia.fillRect = function(x, y, w, h, c) {
     setPaletteIndex(c);
     ctx.fillRect(x,y,w,h);
-}; 
+};
 
 var drawRect = Hestia.drawRect = function(x, y, w, h, c) {
     setPaletteIndex(c);
@@ -574,7 +554,7 @@ var drawSprite = Hestia.drawSprite = function(idx, x, y, transparencyIndex) {
 	    }
 	}
 	/* Draw Image Method
-	let sx = (idx*s)%spriteSheet.width, 
+	let sx = (idx*s)%spriteSheet.width,
 		sy = s * Math.floor((idx*s)/spriteSheet.width),
 		sw = s*1, sh = s*1; // Only supporting 1:1 scale atm
 	// Note scaling using drawImage is not recommended for performance
@@ -672,7 +652,7 @@ var palettiseSpriteSheet = function(spriteSheet, palette, transparencyIndex) {
     if (!transparencyIndex || transparencyIndex < 0 || transparencyIndex >= palette.length) {
         transparencyIndex = 0;
     }
-    
+
     let s = spriteSheet.spriteSize;
 	palettiseCanvas.width = s;
     palettiseCanvas.height = s;
@@ -680,12 +660,12 @@ var palettiseSpriteSheet = function(spriteSheet, palette, transparencyIndex) {
 
     let spriteCount = Math.floor(spriteSheet.width / s) * Math.floor(spriteSheet.height / s);
     for(let idx = 0; idx < spriteCount; idx++) {
-    	let sx = (idx*s)%spriteSheet.width, 
+    	let sx = (idx*s)%spriteSheet.width,
     		sy = s * Math.floor((idx*s)/spriteSheet.width);
     	ctx.clearRect(0, 0, s, s);
         ctx.drawImage(spriteSheet, sx, sy, s, s, 0, 0, s, s);
         let data = ctx.getImageData(0, 0, s, s).data;
-        
+
         // match colors to pallette index based on difference to RGB values
         let spriteIndicies = [];
         let currentColor = [0, 0, 0, 0];
@@ -694,12 +674,12 @@ var palettiseSpriteSheet = function(spriteSheet, palette, transparencyIndex) {
             currentColor[1] = data[j+1];
             currentColor[2] = data[j+2];
             currentColor[3] = data[j+3];
-            
+
             if (currentColor[3] === 0) {
                 spriteIndicies.push(transparencyIndex);
             } else {
                 let closestDiff = Number.MAX_SAFE_INTEGER;
-                let matchedIndex = 0; 
+                let matchedIndex = 0;
                 let tolerance = 3*255; // TODO: Pass tolerance, 0 seems to work for expected colors
                 for(let i = 0, l = paletteColors.length; i < l; i++) {
                     let diff = 0;
@@ -731,7 +711,7 @@ var createFontJson = function(spriteSheet, name, alphabet, w, h, spacing, reduce
         reducedWidthLowerCase: reducedWidthLowerCase,
         baselineOffsets: baselineOffsets
     };
-    
+
     w = w + spacing;
     h = h + spacing;
 
@@ -740,9 +720,9 @@ var createFontJson = function(spriteSheet, name, alphabet, w, h, spacing, reduce
     let ctx = palettiseCanvas.getContext('2d');
 
     let spriteCount = alphabet.length;
-    
+
     for (let i = 0; i < spriteCount; i++) {
-        let sx = (i*w)%spriteSheet.width, 
+        let sx = (i*w)%spriteSheet.width,
     		sy = h * Math.floor((i*w)/spriteSheet.width);
     	ctx.clearRect(0, 0, w, h);
         ctx.drawImage(spriteSheet, sx, sy, w, h, 0, 0, w, h);
@@ -761,7 +741,7 @@ var createFontJson = function(spriteSheet, name, alphabet, w, h, spacing, reduce
         font[alphabet[i]] = charData;
     }
     fonts[name] = font;
-    currentFont = font; 
+    currentFont = font;
 }
 
 Hestia.palette = function() {
@@ -774,12 +754,12 @@ var tick = function() {
 		elapsed = (Date.now() - lastTime) / 1000;
 		if (ticks === 0 || elapsed > 1 / tickRate) {
 			lastTime = Date.now();
-			ticks++; 
-			
+			ticks++;
+
 			Hestia.update();
 			Hestia.draw();
 			input.update();
-		}		
+		}
 	} else {
 		lastTime = 0;
 	}
@@ -819,7 +799,7 @@ var Input = module.exports = function() {
 		document.addEventListener("keyup", handleKeyUp);
 		document.addEventListener("keydown", handleKeyDown);
 		// mouseenter, mouseout;
-		
+
 		if (keys) {
     		keyCount = keys.length;
     		for (let i = 0; i < keyCount; i++) {

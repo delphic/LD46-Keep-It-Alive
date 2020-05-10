@@ -35,6 +35,7 @@ var GameStates = {
 };
 var gameState = -1; 
 var comendations = 0;
+var successes = [0, 0, 0]; // How many kittys, blobs and kassa have you kept alive?
 
 // Form States
 var confirmingReceipt, feedback, starFieldPoints, starFieldTick;
@@ -48,6 +49,7 @@ var debugUIs = [], journeyUIs = [];
 var journeyTick = 0, journeyLength = config.tickRate * 120;
 var interactionMessageShowTime = 2.5;
 var creature, creatureUpdateInterval = config.tickRate;
+var napping = false;
 var simPaused;
 
 var createDebugUI = function() {
@@ -72,7 +74,7 @@ var createDebugUI = function() {
         addUIElement(moodText);
         
         let yOffset = 26;
-        let healthBar = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: function() { return creature.health / creature.def.health; } })
+        let healthBar = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: function() { return creature.health / creature.def.health; } });
         healthBar.label = "+";
         addUIElement(healthBar);
         debugUIs.push(healthBar);
@@ -98,7 +100,7 @@ var createDebugUI = function() {
         let emotionBars = [];
         for (let i = 0, l = creature.def.emotions.length; i < l; i++) {
             let emotion = creature.def.emotions[i];
-            emotionBars[i] = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: createEmotionValueDelegate(emotion.id) })
+            emotionBars[i] = ProgressBar.create({ x: 1, y: yOffset , width: 64, height: 3, valueDelegate: createEmotionValueDelegate(emotion.id) });
             emotionBars[i].label = emotion.id[0].toUpperCase();
             debugUIs.push(emotionBars[i]);
             addUIElement(emotionBars[i]);
@@ -165,11 +167,11 @@ var resetRoutines = function() {
 var clearRoutines = function() {
     routineTick = 0;
     routines.length = 0;
-    routineStars.lenght = 0;
+    routineStarts.length = 0;
 };
 
 var getNapDesc = function() {
-    let descs = [ "You doze off", "You take a well earned nap", "Everything is under control, nap time!" ];
+    let descs = [ "You doze off", "You take a well earned nap" ];
     return  descs[Math.floor(Math.random() * descs.length)];
 };
 
@@ -325,6 +327,7 @@ var Creature = (function() {
 })();
 
 var kittyDef = {
+    index: 0,
     names: [ "Floofmiester", "Prof. Jiggly", "Fuzzy Boots", "Beans" ],
     desc: "Space Kitty",
     health: 100,
@@ -349,7 +352,7 @@ var kittyDef = {
             switch(happiness){
                 case 4:
                 case 3:
-                    desc = creature.name + " seems to have had a great time!"
+                    desc = creature.name + " seems to have had a great time!";
                     break;
                 case 2:
                     desc = "Thanks for taking care of " + creature.name;
@@ -391,7 +394,7 @@ var kittyDef = {
         creature.mood.desc = highestEmotionDesc;
     },
     update: function(creature) {
-        if (creature.health == 0) {
+        if (creature.health === 0) {
             return;
         }
         
@@ -414,7 +417,7 @@ var kittyDef = {
         if (creature.needs["food"].value == 100) {
             creature.health -= 2;
             // TODO: Health to influence mood
-            if (creature.health == 0) {
+            if (creature.health === 0) {
                 creature.mood.emotionId = null;
                 creature.mood.category = 100;
                 creature.mood.priority = 100;
@@ -577,6 +580,7 @@ var kittyDef = {
 };
 
 var blobDef = {
+    index: 1,
     names: [ "Jelly", "Blob", "Pulper", "Zogoo" ],
     desc: "Unknown",
     health: 100,
@@ -625,7 +629,7 @@ var blobDef = {
         creature.mood.desc = highestEmotionDesc;
     },
     update: function(creature) {
-        if (creature.health == 0) {
+        if (creature.health === 0) {
             return;
         }
         
@@ -645,7 +649,7 @@ var blobDef = {
         if ((creature.needs["play"] > 20 || creature.needs["play"] < 80) 
             && (creature.needs["food"] < 80)) {
             // Track back to 0
-            creature.changeEmotion("cheer", -1 * Math.sign(craeture.emotion["cheer"]));
+            creature.changeEmotion("cheer", -1 * Math.sign(creature.emotion["cheer"]));
         }
 
         // Starvation
@@ -783,6 +787,7 @@ var blobDef = {
 };
 
 var kassaDef = {
+    index: 2,
     names: [ "xm-329", "72-zr-5", "kf-12", "7_xr_7", "5_hf_5", "lr+17" ],
     desc: "Kassa",
     health: 100,
@@ -798,8 +803,7 @@ var kassaDef = {
         let desc = "";
         if (creature.health > 80) {
             let descs = [ creature.name + " is looking quite hale",  creature.name + "wanted to say goodby", "This kassa is delicious!" ];
-            desc = descs[Math.floor(Math.random() * descs.length)]; ;
-            
+            desc = descs[Math.floor(Math.random() * descs.length)];
         } else if (creature.health > 0) {
             let descs = [ creature.name + " is a bit limp",  "why is " + creature.name + " so dry", "They're making so much noise, what did you do?" ];
             desc = descs[Math.floor(Math.random() * descs.length)];
@@ -941,14 +945,17 @@ var kassaDef = {
 };
 
 var createRandomCreature = function() {
-    let type = Math.floor(Math.random() * 3);
+    // You must keep a kitty alive before it gives you a slime
+    // and must keep a slime alive before it gives you a kassa
+    let maxValue = successes[0] === 0 ? 1 : successes[1] === 0 ? 2 : 3;
+    let type = Math.floor(Math.random() * maxValue);
     let result;
-    if (type == 0) {
-        result = Creature.create(blobDef);
-    } else if (type == 1) {
-        result = Creature.create(kassaDef);
-    } else {
+    if (type === 0) {
         result = Creature.create(kittyDef);
+    } else if (type == 1) {
+        result = Creature.create(blobDef);
+    } else {
+        result = Creature.create(kassaDef);
     }
 
     // TODO: Randomise Starting Needs
@@ -957,7 +964,7 @@ var createRandomCreature = function() {
 };
 
 // TODO: Move actions + interaction to class / protype
-var interaction = function(index) { // TODO: Context / Options
+var interaction = function(index, callback) { // TODO: Context / Options
     if (journeyTick >= journeyLength) {
         // No interactions if journey is complete
         return;
@@ -987,7 +994,10 @@ var interaction = function(index) { // TODO: Context / Options
         } else {
             simPaused = false;
         }
-    })
+        if (callback) {
+            callback();
+        }
+    });
 };
 
 var showMessageBox = function(text, duration, callback) {
@@ -1020,7 +1030,10 @@ var actions = [{
 }, {
     name: "nap",
     desc: "Nap",
-    interaction: function() { interaction(2); }
+    interaction: function() { 
+        napping = true;
+        interaction(2, function() { napping = false; });
+    }
 }]; // Contextual Actions?
 
 var generateStarField = function() {
@@ -1210,6 +1223,8 @@ var setGameState = function(index) {
             journeysComplete += 1;
             feedback = creature.calculateFeedback();
             if (creature.health > 0) {
+                successes[creature.def.index] += 1;
+                console.log("Have kept " + successes[creature.def.index] + " alive");
                 score += 1; 
             }
             break;
@@ -1352,7 +1367,7 @@ var draw = function() {
             Hestia.drawText(".............", 40 - 1, y + 2, 2);
             Hestia.drawText(creature.def.desc, 40, y, 1);
 
-            y += 16
+            y += 16;
             Hestia.drawText("Creature Name:", 40, y, 0);
             y += 8;
             Hestia.drawText(".............", 40 - 1 , y + 2, 2);
@@ -1460,10 +1475,13 @@ var draw = function() {
     } else if (gameState == GameStates.JOURNEY) {
         Hestia.clear(3);
     	// TODO: Draw portholes? with moving stars? (mock plz)
-    	creature.draw(config.width/2 - 32, config.height/2 - 32);
+        if (!napping) {
+        	creature.draw(config.width/2 - 32, config.height/2 - 32);
+        } else {
+        	Hestia.drawSpriteSection(6, config.width/2 - 4, config.height/2 - 4, 32, 24, 8, 8, 3);
+        }
     } else {
         Hestia.clear(3);
-        
     }
 
 	for (let i = 0, l = uiElements.length; i < l; i++) {
@@ -1521,7 +1539,7 @@ var TextBox = (function(){
 		        this.recalculateDimensions();
 		    }
 
-			var x = this.x, y = this.y, w = this.w, h = this.h, indent = this.indent
+			var x = this.x, y = this.y, w = this.w, h = this.h, indent = this.indent,
 				padding = this.padding, spacing = this.spacing, lines = this.lines,
 				select = this.select, index = this.index, c = this.color, charHeight = this.charHeight;
 
@@ -1575,7 +1593,7 @@ var TextBox = (function(){
                     if (Hestia.buttonUp(1)) {
                         targetIndex = this.index + this.grid[0];   
                     }
-                    if (Hestia.buttonUp(2) && this.index % this.grid[0] != 0) {
+                    if (Hestia.buttonUp(2) && this.index % this.grid[0] !== 0) {
                         targetIndex = this.index - 1; 
                     }
                     if (Hestia.buttonUp(3) && this.index % this.grid[0] != this.grid[1] - 1) {
